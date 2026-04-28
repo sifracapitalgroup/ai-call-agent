@@ -301,16 +301,22 @@ You are here to:
 Say less. Stay direct. Stay in control.
 `;
 
-// ✅ CORRECT LOCATION
+// ✅ new version (correct)
 async function getLeads() {
-  const auth = new google.auth.JWT(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    null,
-    process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-  );
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    },
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+  });
 
-  const sheets = google.sheets({ version: "v4", auth });
+  const authClient = await auth.getClient();
+
+  const sheets = google.sheets({
+    version: "v4",
+    auth: authClient,
+  });
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
