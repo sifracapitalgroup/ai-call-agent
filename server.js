@@ -436,24 +436,70 @@ function trySendOpener() {
     }, 2500);
   }
 
-  function sendSessionUpdate() {
-    const sessionUpdate = {
-      type: "session.update",
-    session: {
-  turn_detection: {
-    type: "server_vad",
-    threshold: 0.8,
-    prefix_padding_ms: 300,
-    silence_duration_ms: 750,
-  },
-  input_audio_format: "g711_ulaw",
-  instructions: SYSTEM_PROMPT,
-  modalities: ["text"],
-  temperature: 0.65,
-},
-    };
+ async function sendSessionUpdate() {
+  let leadContext = "";
 
- openAiWs.send(JSON.stringify(sessionUpdate));
+  try {
+    const data = await getLeads();
+
+    const headers = data[0];
+    const firstLead = data[1];
+
+    const lead = Object.fromEntries(
+      headers.map((h, i) => [h, firstLead[i] || ""])
+    );
+
+    leadContext = `
+CURRENT LEAD CONTEXT:
+
+You are calling:
+Name: ${lead["First Name"] || ""} ${lead["Last Name"] || ""}
+Property Address: ${lead["Property Address"] || ""}
+City: ${lead["City"] || ""}
+State: ${lead["State"] || ""}
+Zip Code: ${lead["Zip Code"] || ""}
+Estimated Value: ${lead["Estimated Value"] || ""}
+Sq Ft: ${lead["Sq Ft"] || ""}
+Beds: ${lead["Bed"] || ""}
+Baths: ${lead["Bath"] || ""}
+Year Built: ${lead["Year Built"] || ""}
+Sale Price: ${lead["Sale Price"] || ""}
+Last Sold: ${lead["Last Sold"] || ""}
+
+Use this as background context.
+Do NOT read all details out loud.
+Mention the property address naturally.
+Do not sound creepy or like you're reading from a database.
+Use the data only to guide better questions.
+`;
+
+    console.log("CALL LEAD LOADED:", lead);
+  } catch (err) {
+    console.error("CALL LEAD ERROR:", err.message);
+
+    leadContext = `
+CURRENT LEAD CONTEXT:
+No spreadsheet lead data loaded. Keep the call generic.
+`;
+  }
+
+  const sessionUpdate = {
+    type: "session.update",
+    session: {
+      turn_detection: {
+        type: "server_vad",
+        threshold: 0.8,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 750,
+      },
+      input_audio_format: "g711_ulaw",
+      instructions: SYSTEM_PROMPT + "\n\n" + leadContext,
+      modalities: ["text"],
+      temperature: 0.65,
+    },
+  };
+
+  openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
   function clearTwilioAudio() {
@@ -487,11 +533,14 @@ function trySendOpener() {
     responseStartTimestamp = null;
   }
 
-  openAiWs.on("open", () => {
-    console.log("Connected to OpenAI Realtime");
-    sendSessionUpdate();
-    trySendOpener();
-  });
+ openAiWs.on("open", async () => {
+  console.log("Connected to OpenAI Realtime");
+
+  await sendSessionUpdate(); // wait for sheet + lead to load
+
+  trySendOpener(); // then speak
+});
+
 // ✅ put function FIRST
 async function speakWithElevenLabs(text) {
   try {
@@ -686,7 +735,17 @@ server.listen(PORT, async () => {
 
   try {
     const data = await getLeads();
-    console.log("SHEET DATA:", data);
+
+    const headers = data[0];
+    const firstLead = data[1];
+
+    const lead = Object.fromEntries(
+      headers.map((h, i) => [h, firstLead[i]])
+    );
+
+    console.log("SHEET CONNECTED. ROWS:", data.length);
+    console.log("LEAD OBJECT:", lead);
+
   } catch (err) {
     console.error("SHEET ERROR:", err.message);
   }
