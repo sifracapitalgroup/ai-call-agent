@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
+const { google } = require("googleapis");
 
 const app = express();
 const server = http.createServer(app);
@@ -31,6 +32,8 @@ Do NOT sound scripted or robotic.
 Do NOT overtalk.
 Do NOT explain things in detail.
 Do NOT try to sound smart.
+
+
 
 ---
 
@@ -297,6 +300,25 @@ You are here to:
 
 Say less. Stay direct. Stay in control.
 `;
+
+// ✅ CORRECT LOCATION
+async function getLeads() {
+  const auth = new google.auth.JWT(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    null,
+    process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+  );
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: "Sheet1!A:Z",
+  });
+
+  return res.data.values;
+}
 
 function getPublicBaseUrl(req) {
   if (process.env.PUBLIC_BASE_URL) {
@@ -653,6 +675,13 @@ if (event.type === "response.text.done") {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+
+  try {
+    const data = await getLeads();
+    console.log("SHEET DATA:", data);
+  } catch (err) {
+    console.error("SHEET ERROR:", err.message);
+  }
 });
