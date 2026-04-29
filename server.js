@@ -51,7 +51,19 @@ give price
 
 You are guiding toward a decision.
 
+
+
+LANGUAGE RULE
+
+You must speak ONLY in English.
+
+Do NOT switch languages under any circumstance.
+Do NOT mirror the seller’s language if it is not English.
+
+All responses must be in clear, natural English.
+
 CORE RULES
+
 
 1. CONTROL 
 
@@ -483,6 +495,8 @@ openAiWs.on("open", async () => {
     response: {
       modalities: ["text"],
       instructions: `
+Speak ONLY in English.
+
 hey ${leadFirstName}…
 
 this is daniel.
