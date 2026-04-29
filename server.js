@@ -529,7 +529,7 @@ async function speakWithElevenLabs(text) {
         },
         body: JSON.stringify({
           text,
-          model_id: "model_id: "eleven_turbo_v2_5",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: {
             stability: 0.65,
             similarity_boost: 0.75,
