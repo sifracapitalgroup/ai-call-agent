@@ -111,12 +111,9 @@ If the seller gives real detail:
 
 Use:
 “Yeah, I get that.”
+
 “Sounds like that’s been a process.”
 
-Then ask:
-“What happened there?”
-or
-“How long has that been going on?”
 
 EXPLANATION RULE
 
