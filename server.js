@@ -5,6 +5,16 @@ const http = require("http");
 const WebSocket = require("ws");
 const { google } = require("googleapis");
 
+const twilio = require("twilio");
+const PORT = process.env.PORT || 3000;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// 👉 ADD THIS HERE
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
 const app = express();
 const server = http.createServer(app);
 
@@ -275,41 +285,51 @@ function trySendOpener() {
   );
 
   function shouldEndCall(text) {
-    const t = String(text || "").toLowerCase();
+  const t = String(text || "").toLowerCase();
 
-    return (
-      t.includes("got it, no worries at all") ||
-      t.includes("appreciate your time") ||
-      t.includes("give you a call back next week") ||
-      t.includes("i’ll run some numbers") ||
-      t.includes("i'll run some numbers")
-    );
-  }
+  return (
+    t.includes("circle back") ||
+    t.includes("take a look on my end") ||
+    t.includes("call you back") ||
+    t.includes("appreciate your time") ||
+    t.includes("no worries at all") ||
+    t.includes("run some numbers")
+  );
+}
 
-  function scheduleEndCall(reason) {
-    if (callEndingScheduled) return;
-    callEndingScheduled = true;
+function scheduleEndCall(reason) {
+  if (callEndingScheduled) return;
+  callEndingScheduled = true;
 
-    console.log("AUTO ENDING CALL:", reason);
+  console.log("AUTO ENDING CALL:", reason);
 
-    setTimeout(() => {
-      try {
-        if (twilioWs.readyState === WebSocket.OPEN) {
-          twilioWs.close();
-        }
-      } catch (err) {
-        console.error("Twilio close error:", err);
+  setTimeout(async () => {
+    try {
+      if (callSid) {
+        console.log("FORCE END CALL:", callSid);
+
+        await twilioClient.calls(callSid).update({
+          status: "completed",
+        });
       }
+    } catch (err) {
+      console.error("TWILIO END ERROR:", err);
+    }
 
-      try {
-        if (openAiWs.readyState === WebSocket.OPEN) {
-          openAiWs.close();
-        }
-      } catch (err) {
-        console.error("OpenAI close error:", err);
+    try {
+      if (twilioWs.readyState === WebSocket.OPEN) {
+        twilioWs.close();
       }
-    }, 2500);
-  }
+    } catch (err) {}
+
+    try {
+      if (openAiWs.readyState === WebSocket.OPEN) {
+        openAiWs.close();
+      }
+    } catch (err) {}
+
+  }, 1500); // shorter = cleaner
+}
 
  async function sendSessionUpdate() {
   let leadContext = "";
@@ -503,9 +523,12 @@ if (event.type === "response.text.done") {
 
   speakWithElevenLabs(assistantText);
 
-  if (shouldEndCall(assistantText)) {
-    scheduleEndCall(assistantText);
-  }
+console.log("CHECKING END CALL:", assistantText);
+
+if (shouldEndCall(assistantText)) {
+  console.log("END CALL TRIGGERED"); // 👈 add this
+  scheduleEndCall(assistantText);
+}where would i see that
 
   assistantText = "";
 }
