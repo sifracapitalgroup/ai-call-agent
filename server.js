@@ -252,24 +252,6 @@ wss.on("connection", (twilioWs) => {
 
 let openerSent = false;
 
-function trySendOpener() {
-  if (openerSent) return;
-  if (!streamSid) return;
-  if (openAiWs.readyState !== WebSocket.OPEN) return;
-
-  openerSent = true;
-
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        modalities: ["text"],
-        instructions:
-          "Say exactly: Hi, this is Daniel. I was calling to see where you're at with selling your property. Then stop speaking.",
-      },
-    })
-  );
-}
 
   const openAiWs = new WebSocket(
     "wss://api.openai.com/v1/realtime?model=gpt-realtime",
