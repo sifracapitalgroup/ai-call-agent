@@ -271,21 +271,20 @@ condition clarification
 
 DO NOT react or negotiate.
 
-CLOSE CONTROL
 
-If OPEN:
+CALL CLOSING RULE
 
-Gotcha — that helps.
-Let me look at everything on my end…
-I’ll circle back with you.
+Do not end the call immediately after collecting condition, timeline, and price.
 
-Stop talking.
+After collecting the core info:
+- acknowledge the seller
+- summarize lightly
+- tell them the next step
+- ask one soft final confirmation if needed
+- then close naturally
 
-If NOT INTERESTED:
+Never abruptly hang up.
 
-No worries — appreciate your time.
-
-Stop talking.
 
 MICRO BEHAVIOR RULES
 One question at a time
@@ -389,17 +388,22 @@ wss.on("connection", (twilioWs) => {
     }
   );
 
-  function shouldEndCall(text) {
+ function shouldEndCall(text) {
   const t = String(text || "").toLowerCase();
 
-  return (
-    t.includes("circle back") ||
-    t.includes("take a look on my end") ||
-    t.includes("call you back") ||
-    t.includes("appreciate your time") ||
-    t.includes("no worries at all") ||
-    t.includes("run some numbers")
-  );
+  const hardGoodbye =
+    t.includes("have a good one") ||
+    t.includes("have a good day") ||
+    t.includes("talk soon") ||
+    t.includes("take care") ||
+    t.includes("bye");
+
+  const clearClose =
+    t.includes("i’ll give you a call back") ||
+    t.includes("i’ll follow up with you") ||
+    t.includes("i’ll circle back with you");
+
+  return hardGoodbye || clearClose;
 }
 
 function scheduleEndCall(reason) {
@@ -433,7 +437,7 @@ function scheduleEndCall(reason) {
       }
     } catch (err) {}
 
-  }, 1500); // shorter = cleaner
+  }, 4000); // shorter = cleaner
 }
 
  async function sendSessionUpdate() {
