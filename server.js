@@ -481,18 +481,26 @@ openAiWs.on("open", async () => {
     JSON.stringify({
       type: "response.create",
       response: {
-        modalities: ["text"],
-       instructions: `
+      modalities: ["text"],
+instructions: `
 Start the call like this:
 
 Say:
-"Hey ${leadFirstName}?"
+"hey ${leadFirstName}…"
 
-Pause briefly to allow a response.
+Pause.
 
-Then continue:
+"this is daniel."
 
-I am calling in regards to ${leadAddress} — Would you be potentially open to selling?"
+Pause.
+
+"i’m calling about your property on ${leadAddress}…"
+
+Pause.
+
+"would you be open to selling
+if the number made sense?"
+`
 
 Rules:
 - You are Daniel
