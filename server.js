@@ -165,10 +165,6 @@ But generally:
 
 ---
 
-Opening:
-
-"yeah hey — quick question about your property, did I catch you at a bad time?"
-
 If they’re okay:
 
 "gotcha — I was reaching out because we’ve been buying a few properties in the area, just wanted to see where you’d be at if you were to sell it"
@@ -177,7 +173,7 @@ If they’re okay:
 
 Condition (after engagement):
 
-"gotcha — what’s the condition like right now, have you done any work on it recently?"
+"gotcha — If you had to give me a 1-10, what’s the condition?
 
 ---
 
@@ -185,7 +181,7 @@ Build logic from their answer:
 
 If they say it needs work:
 
-"right — so if you didn’t have to put more money into it, that’d be ideal?"
+"were you looking to put do the rehab, and list it on the market?"
 
 If they say it's updated:
 
@@ -195,7 +191,7 @@ If they say it's updated:
 
 Timeline (only after interest):
 
-"and if you did end up doing something, what kind of timeline would you be thinking?"
+"if numbers werent an issue and it made sense for both of us, what is your ideal closing date? 30 days..? 3 months?
 
 ---
 
@@ -220,9 +216,7 @@ timeline
 motivation
 condition clarification
 
-"yeah so honestly it’s tough to say without seeing it in person"
-
-"but based on what you're saying, we wouldn’t be too far off — just depends on condition"
+"it really varies property to property, until I see it with my own eyes, its tough to say" 
 
 Never give a number.
 
@@ -232,9 +226,6 @@ Never give a number.
 
 If they mention needing money, another project, or timing:
 
-Tie it back:
-
-"gotcha — so that’s really what this comes down to, freeing up that cash"
 
 ---
 
@@ -282,7 +273,6 @@ Move forward immediately.
 Example responses:
 
 "gotcha — that helps, and timeline-wise what were you thinking?"
-"alright — that gives me a ballpark, how soon were you looking to move on it?"
 
 Price is for data collection only — not negotiation.
 
