@@ -478,42 +478,30 @@ openAiWs.on("open", async () => {
   await sendSessionUpdate();
 
   openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
+  JSON.stringify({
+    type: "response.create",
+    response: {
       modalities: ["text"],
-instructions: `
-Start the call like this:
+      instructions: `
+hey ${leadFirstName}…
 
-Say:
-"hey ${leadFirstName}…"
+this is daniel.
 
-Pause.
+i’m calling about your property on ${leadAddress}…
 
-"this is daniel."
-
-Pause.
-
-"i’m calling about your property on ${leadAddress}…"
-
-Pause.
-
-"would you be open to selling
-if the number made sense?"
-`
+would you be open to selling
+if the number made sense?
 
 Rules:
 - You are Daniel
 - Do not say any company
 - Do not change the name or address
 - Then STOP speaking
-`,
-      },
-    })
-  );
-}); // ✅ ADD THIS
+`
+    },
+  })
+);
 
-// ✅ put function FIRST
 async function speakWithElevenLabs(text) {
   try {
     console.log("ELEVEN START:", text);
@@ -540,7 +528,7 @@ async function speakWithElevenLabs(text) {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_turbo_v2_5",
+          model_id: "eleven_flash_v2_5",
           voice_settings: {
             stability: 0.65,
             similarity_boost: 0.75,
