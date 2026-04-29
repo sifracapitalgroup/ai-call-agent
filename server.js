@@ -407,17 +407,17 @@ No spreadsheet lead data loaded. Keep the call generic.
     responseStartTimestamp = null;
   }
 
- openAiWs.on("open", async () => {
+openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
   await sendSessionUpdate();
 
   openAiWs.send(
-  JSON.stringify({
-    type: "response.create",
-    response: {
-      modalities: ["text"],
-      instructions: `
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["text"],
+        instructions: `
 Say EXACTLY this:
 
 "Hey ${leadFirstName}? This is Daniel. I was calling about your property on ${leadAddress} — wanted to see if you'd be open to selling it if the number made sense?"
@@ -428,9 +428,10 @@ Rules:
 - Do not change the name or address
 - Then STOP speaking
 `,
-    },
-  })
-);
+      },
+    })
+  );
+}); // ✅ ADD THIS
 
 // ✅ put function FIRST
 async function speakWithElevenLabs(text) {
