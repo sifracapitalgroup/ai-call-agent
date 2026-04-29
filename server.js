@@ -165,20 +165,26 @@ Let them talk
 
 Then bring it back:
 
-So ideally—
-are you thinking more like 30 days… or closer to 90?
+"Let’s say everything made sense numbers-wise—
+what’s the ideal timeframe to close?”
+
+(if they don’t give one:)
+
+“no worries—just roughly,
+are you thinking more like 30 days… or 90?”
+
 
 PRICE (SOFT COLLECTION)
 
-And if everything lined up—
-where do you think you’d need to be?
+And in a perfect word where everything lined up—
+where do you think you’d need to be, price wise?
 
 PRICE HANDLING
 
 If they give a number:
 
 Neutral response:
-“gotcha — that helps”
+“Got it, good to know what your looking for”
 
 Then immediately move:
 
