@@ -249,8 +249,9 @@ wss.on("connection", (twilioWs) => {
   let lastAssistantItem = null;
   let assistantTranscript = "";
   let callEndingScheduled = false;
-
-let openerSent = false;
+  let leadFirstName = "there";
+  let leadAddress = "your property";
+  
 
 
   const openAiWs = new WebSocket(
@@ -322,6 +323,9 @@ function scheduleEndCall(reason) {
     const lead = Object.fromEntries(
       headers.map((h, i) => [h, firstLead[i] || ""])
     );
+
+leadFirstName = lead["First Name"] || "there";
+    leadAddress = lead["Property Address"] || "your property";
 
     leadContext = `
 CURRENT LEAD CONTEXT:
