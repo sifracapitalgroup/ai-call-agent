@@ -410,9 +410,18 @@ No spreadsheet lead data loaded. Keep the call generic.
  openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
-  await sendSessionUpdate(); // wait for sheet + lead to load
+  await sendSessionUpdate();
 
-  trySendOpener(); // then speak
+  openAiWs.send(
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["text"],
+        instructions:
+          "Start the call naturally using the current lead context. Use the seller name and property address if available. Keep it short, casual, and confident. Then stop speaking.",
+      },
+    })
+  );
 });
 
 // ✅ put function FIRST
@@ -551,7 +560,7 @@ if (shouldEndCall(assistantText)) {
           callSid,
         });
 
-        trySendOpener();
+     
 
         return;
       }
