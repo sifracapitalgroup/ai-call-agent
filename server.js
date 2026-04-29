@@ -502,6 +502,8 @@ Rules:
   })
 );
 
+});
+
 async function speakWithElevenLabs(text) {
   try {
     console.log("ELEVEN START:", text);
