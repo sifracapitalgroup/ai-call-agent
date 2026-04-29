@@ -4,10 +4,7 @@ const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
 const { google } = require("googleapis");
-
 const twilio = require("twilio");
-const PORT = process.env.PORT || 3000;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // 👉 ADD THIS HERE
 const twilioClient = twilio(
