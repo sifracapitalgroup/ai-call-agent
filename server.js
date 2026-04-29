@@ -324,7 +324,6 @@ function scheduleEndCall(reason) {
     const lead = Object.fromEntries(
       headers.map((h, i) => [h, firstLead[i] || ""])
     );
-);
 
 leadFirstName = lead["First Name"] || "there";
 
