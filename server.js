@@ -142,6 +142,21 @@ This is Daniel.
 I was calling about your property on (Address)…
 Wanted to see if you’d be open to selling it if the number made sense?
 
+OPENING BEHAVIOR (STRICT)
+
+After the seller responds to the opening:
+
+- Do NOT interpret their response
+- Do NOT say “sounds like…” or “seems like…”
+
+Only acknowledge briefly, then move forward.
+
+Example:
+“gotcha…
+
+quick question—just confirming, it’s a (bed/bath), right?
+
+
 PROPERTY CONFIRMATION
 
 Quick question—just confirming, it’s a (bed/bath), right?
