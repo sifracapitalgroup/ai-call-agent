@@ -324,9 +324,6 @@ function scheduleEndCall(reason) {
     const lead = Object.fromEntries(
       headers.map((h, i) => [h, firstLead[i] || ""])
     );
-
-const lead = Object.fromEntries(
-  headers.map((h, i) => [h, firstLead[i] || ""])
 );
 
 leadFirstName = lead["First Name"] || "there";
@@ -367,15 +364,21 @@ Use the data only to guide better questions.
 console.log("CALL LEAD LOADED:", {
   name: leadFirstName,
   street: leadAddress,
-  city: leadCity,;
+  city: leadCity,
+});
 
-leadContext = `
+} catch (err) {
+  console.error("CALL LEAD ERROR:", err.message);
+
+  leadFirstName = "there";
+  leadAddress = "your property";
+  leadCity = "";
+
+  leadContext = `
 CURRENT LEAD CONTEXT:
 No spreadsheet lead data loaded. Keep the call generic.
 `;
-
-  }
-
+}
   const sessionUpdate = {
     type: "session.update",
     session: {
