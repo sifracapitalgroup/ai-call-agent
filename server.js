@@ -251,6 +251,7 @@ wss.on("connection", (twilioWs) => {
   let callEndingScheduled = false;
   let leadFirstName = "there";
   let leadAddress = "your property";
+  let leadCity = "";
   
 
 
@@ -324,10 +325,22 @@ function scheduleEndCall(reason) {
       headers.map((h, i) => [h, firstLead[i] || ""])
     );
 
-leadFirstName = lead["First Name"] || "there";
-    leadAddress = lead["Property Address"] || "your property";
+const lead = Object.fromEntries(
+  headers.map((h, i) => [h, firstLead[i] || ""])
+);
 
-    leadContext = `
+leadFirstName = lead["First Name"] || "there";
+
+const fullAddress = lead["Property Address"] || "your property";
+
+leadAddress = fullAddress
+  .replace(/^\d+\s+/, "")   // remove house number
+  .replace(/,\s*.*/, "")   // remove city/state/zip
+  .trim();
+
+leadCity = lead["City"] || "";
+
+leadContext = `
 CURRENT LEAD CONTEXT:
 
 You are calling:
@@ -351,14 +364,16 @@ Do not sound creepy or like you're reading from a database.
 Use the data only to guide better questions.
 `;
 
-    console.log("CALL LEAD LOADED:", lead);
-  } catch (err) {
-    console.error("CALL LEAD ERROR:", err.message);
+console.log("CALL LEAD LOADED:", {
+  name: leadFirstName,
+  street: leadAddress,
+  city: leadCity,;
 
-    leadContext = `
+leadContext = `
 CURRENT LEAD CONTEXT:
 No spreadsheet lead data loaded. Keep the call generic.
 `;
+
   }
 
   const sessionUpdate = {
@@ -421,10 +436,17 @@ openAiWs.on("open", async () => {
       type: "response.create",
       response: {
         modalities: ["text"],
-        instructions: `
-Say EXACTLY this:
+       instructions: `
+Start the call like this:
 
-"Hey ${leadFirstName}? This is Daniel. I was calling about your property on ${leadAddress} — wanted to see if you'd be open to selling it if the number made sense?"
+Say:
+"Hey ${leadFirstName}?"
+
+Pause briefly to allow a response.
+
+Then continue:
+
+I am calling in regards to ${leadAddress} — Would you be potentially open to selling?"
 
 Rules:
 - You are Daniel
