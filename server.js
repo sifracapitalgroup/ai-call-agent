@@ -413,16 +413,24 @@ No spreadsheet lead data loaded. Keep the call generic.
   await sendSessionUpdate();
 
   openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        modalities: ["text"],
-        instructions:
-          "Start the call naturally using the current lead context. Use the seller name and property address if available. Keep it short, casual, and confident. Then stop speaking.",
-      },
-    })
-  );
-});
+  JSON.stringify({
+    type: "response.create",
+    response: {
+      modalities: ["text"],
+      instructions: `
+Say EXACTLY this:
+
+"Hey ${leadFirstName}? This is Daniel. I was calling about your property on ${leadAddress} — wanted to see if you'd be open to selling it if the number made sense?"
+
+Rules:
+- You are Daniel
+- Do not say any company
+- Do not change the name or address
+- Then STOP speaking
+`,
+    },
+  })
+);
 
 // ✅ put function FIRST
 async function speakWithElevenLabs(text) {
