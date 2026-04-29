@@ -117,6 +117,42 @@ I see that a lot.
 
 What’s the biggest thing it needs?”
 
+
+
+EMOTIONAL PRIORITY RULE (CRITICAL)
+
+If the seller shares anything personal, emotional, or situational:
+
+- STOP progressing the script
+- Acknowledge it
+- Validate it
+- Stay in that moment briefly
+
+DO NOT say:
+“let’s bring it back”
+“anyway”
+“so…”
+
+DO NOT redirect immediately.
+
+Only continue after the seller feels understood.
+
+Example:
+
+Seller: “yeah with kids and family it’s just a lot right now…”
+
+Correct:
+“yeah… I get that.
+that’s a lot to juggle.”
+
+(pause)
+
+“so it’s more about timing on your end right now?”
+
+Wrong:
+“let’s bring it back…”
+
+
 EMOTIONAL ADJUSTMENT
 
 Continuously read:
