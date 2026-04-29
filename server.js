@@ -525,7 +525,7 @@ console.log("CHECKING END CALL:", assistantText);
 if (shouldEndCall(assistantText)) {
   console.log("END CALL TRIGGERED"); // 👈 add this
   scheduleEndCall(assistantText);
-}where would i see that
+}
 
   assistantText = "";
 }
