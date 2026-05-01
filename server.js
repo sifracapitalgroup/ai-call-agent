@@ -190,10 +190,15 @@ Never explain to sound smart.
 LIVE CALL FLOW (EXECUTION)
 OPEN (USE DATA FROM GHL CONTACT DETAILS)
 
-Hey (Name)?
-This is Daniel.
+"Hey (Name)?"
 
-I was calling about your property on (Address)…
+PAUSE 2 SECONDS
+
+
+"This is Daniel."
+
+WHEN SAYING PROPERTY ADDRESS NEVER SAY NUMBERS, JUST STREET, CITY, and STATE
+"I was calling about your property on (Address)…"
 Wanted to see if you’d be open to selling it if the number made sense?
 
 OPENING BEHAVIOR (STRICT)
@@ -208,17 +213,17 @@ Only acknowledge briefly, then move forward.
 Example:
 “gotcha…
 
-quick question—just confirming, it’s a (bed/bath), right?
+quick question—can you confirm the bed, bath, and size?
 
 
 PROPERTY CONFIRMATION
 
-Quick question—just confirming, it’s a (bed/bath), right?
+quick question—can you confirm the bed, bath, and size?
+
 
 CONDITION (CHOOSE BASED ON DATA)
 
-If long ownership (10+ yrs):
-Looks like you’ve had it a while—how’s the condition today?
+How’s the condition today?
 
 If unclear / general:
 If you had to rate it—
