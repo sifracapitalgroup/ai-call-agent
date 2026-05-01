@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const { google } = require("googleapis");
 const twilio = require("twilio");
 
 // 👉 ADD THIS HERE
@@ -20,6 +19,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+let currentCallLead = {};
 
 if (!OPENAI_API_KEY) {
   throw new Error("Missing OPENAI_API_KEY in .env");
@@ -187,7 +188,7 @@ Only explain when it helps the seller feel understood.
 Never explain to sound smart.
 
 LIVE CALL FLOW (EXECUTION)
-OPEN (USE DATA FROM SPREADSHEET)
+OPEN (USE DATA FROM GHL CONTACT DETAILS)
 
 Hey (Name)?
 This is Daniel.
@@ -306,30 +307,6 @@ move toward a deal
 Less words. More control.
 `;
 
-// ✅ new version (correct)
-async function getLeads() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
-
-  const authClient = await auth.getClient();
-
-  const sheets = google.sheets({
-    version: "v4",
-    auth: authClient,
-  });
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Sheet1!A:Z",
-  });
-
-  return res.data.values;
-}
 
 function getPublicBaseUrl(req) {
   if (process.env.PUBLIC_BASE_URL) {
@@ -362,6 +339,83 @@ app.all("/voice", (req, res) => {
   res.type("text/xml").send(twiml);
 });
 
+app.post("/start-call", async (req, res) => {
+  try {
+    const {
+      firstName,
+      lastName,
+      phone,
+      propertyAddress,
+      streetAddress,
+      address,
+      city,
+      state,
+      zip,
+      beds,
+      baths,
+      sqft,
+      estimatedValue,
+      yearBuilt,
+      salePrice,
+      lastSold,
+      callNotes,
+    } = req.body;
+
+    const cleanPhone = String(phone || "").trim();
+
+    currentCallLead = {
+      firstName: firstName || "there",
+      lastName: lastName || "",
+      phone: cleanPhone,
+      address: propertyAddress || address || streetAddress || "your property",
+      city: city || "",
+      state: state || "",
+      zip: zip || "",
+      beds: beds || "",
+      baths: baths || "",
+      sqft: sqft || "",
+      estimatedValue: estimatedValue || "",
+      yearBuilt: yearBuilt || "",
+      salePrice: salePrice || "",
+      lastSold: lastSold || "",
+      callNotes: callNotes || "",
+    };
+
+    console.log("GHL WEBHOOK HIT:", currentCallLead);
+
+    if (!cleanPhone) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing phone number",
+      });
+    }
+
+    const publicBaseUrl =
+      process.env.PUBLIC_BASE_URL?.replace(/\/$/, "") ||
+      `https://${req.headers.host}`;
+
+    const call = await twilioClient.calls.create({
+      to: cleanPhone,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      url: `${publicBaseUrl}/voice`,
+    });
+
+    console.log("OUTBOUND CALL STARTED:", call.sid);
+
+    res.status(200).json({
+      success: true,
+      message: "Call started",
+      callSid: call.sid,
+    });
+  } catch (err) {
+    console.error("START CALL ERROR:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
 wss.on("connection", (twilioWs) => {
   console.log("Twilio websocket connected");
 
@@ -372,9 +426,9 @@ wss.on("connection", (twilioWs) => {
   let lastAssistantItem = null;
   let assistantTranscript = "";
   let callEndingScheduled = false;
-  let leadFirstName = "there";
-  let leadAddress = "your property";
-  let leadCity = "";
+  let leadFirstName = currentCallLead.firstName || "there";
+  let leadAddress = currentCallLead.address || "your property";
+  let leadCity = currentCallLead.city || "";
   
 
 
@@ -441,45 +495,23 @@ function scheduleEndCall(reason) {
 }
 
  async function sendSessionUpdate() {
-  let leadContext = "";
-
-  try {
-    const data = await getLeads();
-
-    const headers = data[0];
-    const firstLead = data[1];
-
-    const lead = Object.fromEntries(
-      headers.map((h, i) => [h, firstLead[i] || ""])
-    );
-
-leadFirstName = lead["First Name"] || "there";
-
-const fullAddress = lead["Property Address"] || "your property";
-
-leadAddress = fullAddress
-  .replace(/^\d+\s+/, "")   // remove house number
-  .replace(/,\s*.*/, "")   // remove city/state/zip
-  .trim();
-
-leadCity = lead["City"] || "";
-
-leadContext = `
+  const leadContext = `
 CURRENT LEAD CONTEXT:
 
 You are calling:
-Name: ${lead["First Name"] || ""} ${lead["Last Name"] || ""}
-Property Address: ${lead["Property Address"] || ""}
-City: ${lead["City"] || ""}
-State: ${lead["State"] || ""}
-Zip Code: ${lead["Zip Code"] || ""}
-Estimated Value: ${lead["Estimated Value"] || ""}
-Sq Ft: ${lead["Sq Ft"] || ""}
-Beds: ${lead["Bed"] || ""}
-Baths: ${lead["Bath"] || ""}
-Year Built: ${lead["Year Built"] || ""}
-Sale Price: ${lead["Sale Price"] || ""}
-Last Sold: ${lead["Last Sold"] || ""}
+Name: ${currentCallLead.firstName || ""} ${currentCallLead.lastName || ""}
+Property Address: ${currentCallLead.address || ""}
+City: ${currentCallLead.city || ""}
+State: ${currentCallLead.state || ""}
+Zip Code: ${currentCallLead.zip || ""}
+Estimated Value: ${currentCallLead.estimatedValue || ""}
+Sq Ft: ${currentCallLead.sqft || ""}
+Beds: ${currentCallLead.beds || ""}
+Baths: ${currentCallLead.baths || ""}
+Year Built: ${currentCallLead.yearBuilt || ""}
+Sale Price: ${currentCallLead.salePrice || ""}
+Last Sold: ${currentCallLead.lastSold || ""}
+Call Notes: ${currentCallLead.callNotes || ""}
 
 Use this as background context.
 Do NOT read all details out loud.
@@ -488,24 +520,8 @@ Do not sound creepy or like you're reading from a database.
 Use the data only to guide better questions.
 `;
 
-console.log("CALL LEAD LOADED:", {
-  name: leadFirstName,
-  street: leadAddress,
-  city: leadCity,
-});
+  console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
 
-} catch (err) {
-  console.error("CALL LEAD ERROR:", err.message);
-
-  leadFirstName = "there";
-  leadAddress = "your property";
-  leadCity = "";
-
-  leadContext = `
-CURRENT LEAD CONTEXT:
-No spreadsheet lead data loaded. Keep the call generic.
-`;
-}
   const sessionUpdate = {
     type: "session.update",
     session: {
@@ -781,23 +797,6 @@ if (shouldEndCall(assistantText)) {
   });
 });
 
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-
-  try {
-    const data = await getLeads();
-
-    const headers = data[0];
-    const firstLead = data[1];
-
-    const lead = Object.fromEntries(
-      headers.map((h, i) => [h, firstLead[i]])
-    );
-
-    console.log("SHEET CONNECTED. ROWS:", data.length);
-    console.log("LEAD OBJECT:", lead);
-
-  } catch (err) {
-    console.error("SHEET ERROR:", err.message);
-  }
 });
