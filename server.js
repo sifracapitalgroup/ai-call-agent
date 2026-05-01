@@ -343,22 +343,22 @@ app.post("/start-call", async (req, res) => {
   try {
     const {
       first_name,
-      lastName,
+      last_name,
       phone,
-      propertyAddress,
+      property_address,
       streetAddress,
       address,
       city,
       state,
-      zip,
-      beds,
-      baths,
-      sqft,
-      estimatedValue,
-      yearBuilt,
-      salePrice,
-      lastSold,
-      callNotes,
+      postal_code,
+      bed,
+      bath,
+      sq_ft,
+      estimated_value,
+      year_built,
+      sale_price,
+      last_sold,
+      call_notes,
     } = req.body;
 
     const cleanPhone = String(phone || "").trim();
@@ -369,25 +369,25 @@ app.post("/start-call", async (req, res) => {
   full_name?.split(" ")[0] ||
   name?.split(" ")[0] ||
   "there",
-      lastName: lastName || "",
+      last_name: last_name || "",
       phone: cleanPhone,
       address:
-  propertyAddress ||
+  property_address ||
   req.body["Property Address"] ||
   address ||
   streetAddress ||
   "your property",
       city: city || "",
       state: state || "",
-      zip: zip || "",
-      beds: beds || "",
-      baths: baths || "",
-      sqft: sqft || "",
-      estimatedValue: estimatedValue || "",
-      yearBuilt: yearBuilt || "",
-      salePrice: salePrice || "",
-      lastSold: lastSold || "",
-      callNotes: callNotes || "",
+      postal_code: postal_code || "",
+      bed: bed || "",
+      bath: bath || "",
+      sq_ft: sq_ft || "",
+      estimated_value: estimated_value || "",
+      year_built: year_built || "",
+      sale_price: sale_price || "",
+      last_sold: last_sold || "",
+      call_notes: call_notes || "",
     };
 
     console.log("GHL WEBHOOK HIT:", currentCallLead);
@@ -508,17 +508,17 @@ function scheduleEndCall(reason) {
 CURRENT LEAD CONTEXT:
 
 You are calling:
-Name: ${currentCallLead.first_name || ""} ${currentCallLead.lastName || ""}
+Name: ${currentCallLead.first_name || ""} ${currentCallLead.last_name || ""}
 Property Address: ${currentCallLead.address || ""}
 City: ${currentCallLead.city || ""}
 State: ${currentCallLead.state || ""}
 Zip Code: ${currentCallLead.zip || ""}
 Estimated Value: ${currentCallLead.estimatedValue || ""}
 Sq Ft: ${currentCallLead.sqft || ""}
-Beds: ${currentCallLead.beds || ""}
-Baths: ${currentCallLead.baths || ""}
+Bed: ${currentCallLead.bed || ""}
+Bath: ${currentCallLead.bath || ""}
 Year Built: ${currentCallLead.yearBuilt || ""}
-Sale Price: ${currentCallLead.salePrice || ""}
+Sale Price: ${currentCallLead.sale_price || ""}
 Last Sold: ${currentCallLead.lastSold || ""}
 Call Notes: ${currentCallLead.callNotes || ""}
 
