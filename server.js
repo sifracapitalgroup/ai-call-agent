@@ -192,9 +192,6 @@ OPEN (USE DATA FROM GHL CONTACT DETAILS)
 
 "Hey (Name)?"
 
-PAUSE 2 SECONDS
-
-
 "This is Daniel."
 
 ADDRESS RULE (STRICT)
@@ -628,7 +625,9 @@ openAiWs.on("open", async () => {
       instructions: `
 Speak ONLY in English.
 
-hey ${leadFirst_name}…
+hey ${leadFirst_name}…??
+
+...
 
 this is daniel.
 
@@ -641,7 +640,7 @@ Rules:
 - You are Daniel
 - Do not say any company
 - Do not change the name or address
-- Then STOP speaking
+
 `
     },
   })
