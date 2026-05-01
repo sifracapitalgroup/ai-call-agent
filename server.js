@@ -462,7 +462,15 @@ wss.on("connection", (twilioWs) => {
   let assistantTranscript = "";
   let callEndingScheduled = false;
   let leadFirst_name = currentCallLead.first_name || "there";
-  let leadAddress = currentCallLead.address || "your property";
+  let leadAddress = (currentCallLead.address || "your property")
+  .replace(/^\d+\s*/, "")
+  .replace(/\d{5}(-\d{4})?$/, "")
+  .split(",")[0]
+  .trim();
+
+if (currentCallLead.city || currentCallLead.state) {
+  leadAddress += ` in ${currentCallLead.city || ""}${currentCallLead.city && currentCallLead.state ? ", " : ""}${currentCallLead.state || ""}`;
+}
   let leadCity = currentCallLead.city || "";
   
 
