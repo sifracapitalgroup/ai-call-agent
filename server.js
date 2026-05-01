@@ -342,7 +342,7 @@ app.all("/voice", (req, res) => {
 app.post("/start-call", async (req, res) => {
   try {
     const {
-      firstName,
+      first_name,
       lastName,
       phone,
       propertyAddress,
@@ -364,10 +364,19 @@ app.post("/start-call", async (req, res) => {
     const cleanPhone = String(phone || "").trim();
 
     currentCallLead = {
-      firstName: firstName || "there",
+      first_name:
+  first_name ||
+  full_name?.split(" ")[0] ||
+  name?.split(" ")[0] ||
+  "there",
       lastName: lastName || "",
       phone: cleanPhone,
-      address: propertyAddress || address || streetAddress || "your property",
+      address:
+  propertyAddress ||
+  req.body["Property Address"] ||
+  address ||
+  streetAddress ||
+  "your property",
       city: city || "",
       state: state || "",
       zip: zip || "",
@@ -426,7 +435,7 @@ wss.on("connection", (twilioWs) => {
   let lastAssistantItem = null;
   let assistantTranscript = "";
   let callEndingScheduled = false;
-  let leadFirstName = currentCallLead.firstName || "there";
+  let leadFirst_name = currentCallLead.first_name || "there";
   let leadAddress = currentCallLead.address || "your property";
   let leadCity = currentCallLead.city || "";
   
@@ -499,7 +508,7 @@ function scheduleEndCall(reason) {
 CURRENT LEAD CONTEXT:
 
 You are calling:
-Name: ${currentCallLead.firstName || ""} ${currentCallLead.lastName || ""}
+Name: ${currentCallLead.first_name || ""} ${currentCallLead.lastName || ""}
 Property Address: ${currentCallLead.address || ""}
 City: ${currentCallLead.city || ""}
 State: ${currentCallLead.state || ""}
@@ -585,7 +594,7 @@ openAiWs.on("open", async () => {
       instructions: `
 Speak ONLY in English.
 
-hey ${leadFirstName}…
+hey ${leadFirst_name}…
 
 this is daniel.
 
