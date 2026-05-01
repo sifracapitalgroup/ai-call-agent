@@ -197,7 +197,28 @@ PAUSE 2 SECONDS
 
 "This is Daniel."
 
-WHEN SAYING PROPERTY ADDRESS NEVER SAY NUMBERS, JUST STREET, CITY, and STATE
+ADDRESS RULE (STRICT)
+
+When referencing the property:
+
+- NEVER say any numbers
+- NEVER say street number
+- NEVER say zip code
+
+You must ONLY say:
+street name + city + state
+
+Example:
+Input: 5884 Tomahawk Lake Dr, Jacksonville, FL 32254  
+You say: "Tomahawk Lake Dr in Jacksonville, FL"
+
+If you say numbers, you are wrong.
+
+OPEN LINE:
+
+"I was calling about your property on (street name + city + state)…"
+
+
 "I was calling about your property on (Address)…"
 Wanted to see if you’d be open to selling it if the number made sense?
 
