@@ -459,6 +459,21 @@ app.post("/start-call", async (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio websocket connected");
 
+function normalizeAddressForSpeech(address) {
+  if (!address) return "";
+
+  return address
+    .replace(/\bDr\b/gi, "Drive")
+    .replace(/\bRd\b/gi, "Road")
+    .replace(/\bSt\b/gi, "Street")
+    .replace(/\bAve\b/gi, "Avenue")
+    .replace(/\bBlvd\b/gi, "Boulevard")
+    .replace(/\bLn\b/gi, "Lane")
+    .replace(/\bCt\b/gi, "Court")
+    .replace(/\bPl\b/gi, "Place")
+    .replace(/\bTer\b/gi, "Terrace");
+}
+
   let streamSid = null;
   let callSid = null;
   let latestMediaTimestamp = 0;
@@ -467,11 +482,13 @@ wss.on("connection", (twilioWs) => {
   let assistantTranscript = "";
   let callEndingScheduled = false;
   let leadFirst_name = currentCallLead.first_name || "there";
-  let leadAddress = (currentCallLead.address || "your property")
-  .replace(/^\d+\s*/, "")
-  .replace(/\d{5}(-\d{4})?$/, "")
-  .split(",")[0]
-  .trim();
+  let leadAddress = normalizeAddressForSpeech(
+  (currentCallLead.address || "your property")
+    .replace(/^\d+\s*/, "")
+    .replace(/\d{5}(-\d{4})?$/, "")
+    .split(",")[0]
+    .trim()
+);
 
 if (currentCallLead.city || currentCallLead.state) {
   leadAddress += ` in ${currentCallLead.city || ""}${currentCallLead.city && currentCallLead.state ? ", " : ""}${currentCallLead.state || ""}`;
