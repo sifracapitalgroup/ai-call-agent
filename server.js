@@ -643,13 +643,9 @@ Hey ${leadFirst_name}?
 
 .....
 
-This is Daniel.
+Daniel speaking.
 
-......
-
-I was calling about your place on ${leadAddress}...
-
-[pause]
+I'm calling about your place on ${leadAddress}...
 
 Considering the numbers made sense... is that something you'd consider?
 `
