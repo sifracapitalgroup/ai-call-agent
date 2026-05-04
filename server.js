@@ -630,7 +630,7 @@ If a sentence can be shorter, make it shorter.
 
 ` + leadContext,
       modalities: ["text"],
-      temperature: 0.50,
+      temperature: 0.60,
     },
   };
 
@@ -683,7 +683,7 @@ Say ONLY the opening below.
 Do NOT add anything else.
 Do NOT explain.
 Do NOT continue past the question.
-After asking the question, STOP speaking and wait for the seller.
+After asking the question, Pause and wait for the seller to respond. Continue naturally after they speak.
 
 Opening:
 

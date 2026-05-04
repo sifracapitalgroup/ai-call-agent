@@ -1,0 +1,54 @@
+[33m23500b0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m minor tweaks.
+[33m983946c[m tighten response style and reduce verbosity
+[33mf4464a6[m reduce response latency and optimize VAD timing
+[33mf842e01[m tune elevenlabs voice + natural speech delivery
+[33m13e8be7[m reduce VAD sensitivity and prevent false interruptions
+[33ma02aa80[m fix opener slightly AGAIN :)
+[33m61cea23[m fix syntax error in address block
+[33m836dd00[m apply address normalization for TTS
+[33m4ec4259[m tune VAD to prevent false interruptions
+[33mc535bbb[m minor opener tweaks
+[33m44d1141[m fix opener - remove pause text, tighten response.create, stop AI rambling
+[33m16362cd[m fix opener override - stop AI from yapping, enforce short intro
+[33m553804c[m update system prompt - tonality + flow improvements
+[33mb7b7685[m add natural pause in opener (remove hard stop, improve delivery)
+[33m24288eb[m clean leadaddress in opener
+[33m88a3fb0[m enforce address rule in opener (no street number or zip)
+[33m0803ef7[m update opener
+[33m7f39472[m fix GHL tag mapping fallback ALL
+[33m48b2de8[m fix GHL firstName mapping fallback (fullName/name support)
+[33mf02f6d1[m switch to GHL webhook, remove google sheets, pass lead into AI call
+[33m0386902[m fix premature call ending
+[33md9014f1[m emotion.understanding human nature
+[33mbc751ae[m tonality
+[33m32ef486[m update opener
+[33m224d618[m force english language in system prompt
+[33me5da26e[m fix missing bracket
+[33m76593dd[m fix elevenlabs model + voice settings
+[33m0b18888[m update opening script with lead variables and pauses
+[33m3a15e8f[m update system prompt
+[33mf55ba80[m fix elevenlabs model syntax
+[33mf130fa5[m fix elevenlabs model syntax
+[33mad23da0[m update voice settings
+[33m388a1d8[m update AI caller system prompt
+[33mf4fef84[m fix syntax + opener
+[33mc89d887[m fix syntax + duplicate lead + opener
+[33mc15ac60[m fix duplicate lead + restore catch + fix opener
+[33m0ad39be[m fix lead opener variables
+[33m7a24205[m fix syntax error
+[33m47156d1[m fix opener using sheet data + remove hallucination
+[33ma098eb0[m fix natural opener
+[33mc9fabd6[m fix duplicate PORT declaration
+[33m7ed088c[m install twilio package
+[33m884b314[m fix duplicate PORT declaration
+[33m17dbe94[m add end call logic + debug logs
+[33mf389e33[m add end call logic + debug logs
+[33m721b54f[m update
+[33m27ef58c[m update
+[33m9c4113f[m add lead injection into AI
+[33m51e46ba[m fix google auth
+[33m44cc324[m test google sheets connection
+[33mae0de50[m add googleapis dependency
+[33mde8c74d[m remove junk file
+[33m9d72ed6[m package.json
+[33me827cd0[m first deploy clean
