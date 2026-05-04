@@ -391,6 +391,15 @@ app.all("/voice", (req, res) => {
   res.type("text/xml").send(twiml);
 });
 
+app.post("/recording", (req, res) => {
+  const recordingUrl = req.body.RecordingUrl + ".mp3";
+
+  console.log("Recording ready:", recordingUrl);
+  console.log("Call SID:", req.body.CallSid);
+
+  res.sendStatus(200);
+});
+
 app.post("/start-call", async (req, res) => {
   try {
     const {
@@ -456,10 +465,15 @@ app.post("/start-call", async (req, res) => {
       `https://${req.headers.host}`;
 
     const call = await twilioClient.calls.create({
-      to: cleanPhone,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      url: `${publicBaseUrl}/voice`,
-    });
+  to: cleanPhone,
+  from: process.env.TWILIO_PHONE_NUMBER,
+  url: `${publicBaseUrl}/voice`,
+
+  record: true,
+  recordingChannels: "dual",
+  recordingStatusCallback: `${publicBaseUrl}/recording`,
+  recordingStatusCallbackEvent: ["completed"],
+});
 
     console.log("OUTBOUND CALL STARTED:", call.sid);
 
