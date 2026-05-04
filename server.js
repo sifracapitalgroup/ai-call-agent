@@ -575,9 +575,9 @@ Use the data only to guide better questions.
     session: {
       turn_detection: {
         type: "server_vad",
-        threshold: 0.8,
-        prefix_padding_ms: 300,
-        silence_duration_ms: 750,
+        threshold: 0.9,
+        prefix_padding_ms: 500,
+        silence_duration_ms: 1150,
       },
       input_audio_format: "g711_ulaw",
       instructions: SYSTEM_PROMPT + "\n\n" + leadContext,
@@ -751,10 +751,13 @@ if (shouldEndCall(assistantText)) {
 }
 
     // user starts speaking → stop any current playback
-    if (event.type === "input_audio_buffer.speech_started") {
-      console.log("User started speaking");
-      clearTwilioAudio();
-    }
+if (event.type === "input_audio_buffer.speech_started") {
+  console.log("Possible user speech detected");
+
+  setTimeout(() => {
+    clearTwilioAudio();
+  }, 250);
+}
 
     // safety: end-call checks
     if (event.type === "response.done") {
