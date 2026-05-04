@@ -651,6 +651,10 @@ Use the data only to guide better questions.
         silence_duration_ms: 1050,
       },
       input_audio_format: "g711_ulaw",
+      input_audio_transcription: {
+      model: "gpt-4o-mini-transcribe",
+    },
+
       instructions: SYSTEM_PROMPT + `
 
 CRITICAL EXECUTION RULE:
@@ -808,10 +812,23 @@ openAiWs.on("message", (data) => {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
 
-  // collect streaming text
-if (event.type === "response.text.delta" && event.delta) {
-  assistantText += event.delta;
-}
+    if (event.type === "conversation.item.created") {
+      const item = event.item;
+
+      if (item?.type === "message" && item.role === "user") {
+        const userText = item.content?.[0]?.transcript?.trim();
+
+        if (userText) {
+          console.log("USER SAID:", userText);
+          fullCallTranscript += `USER: ${userText}\n`;
+        }
+      }
+    }
+
+    // collect streaming text
+    if (event.type === "response.text.delta" && event.delta) {
+      assistantText += event.delta;
+    }
 
 // full message finished
 if (event.type === "response.text.done") {
