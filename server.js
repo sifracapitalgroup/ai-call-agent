@@ -860,7 +860,7 @@ if (event.type === "input_audio_buffer.speech_started") {
   }
 });
 
-  twilioWs.on("message", (raw) => {
+ twilioWs.on("message", async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
 
@@ -900,22 +900,64 @@ if (event.type === "input_audio_buffer.speech_started") {
   });
 
   if (callSid) {
+    const summaryPrompt = `
+Summarize this real estate call in ONE short line.
+
+Interest level MUST be one of:
+- interested
+- not interested
+- follow up
+- no answer
+
+Format exactly like this:
+interest: [one of the four], condition: [if mentioned], timeline: [if mentioned], price: [if mentioned]
+
+Keep it very short. No extra words.
+
+Call:
+${fullCallTranscript}
+`;
+
+    let summary = "";
+
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "Only output the formatted call summary line." },
+            { role: "user", content: summaryPrompt },
+          ],
+        }),
+      });
+
+      const data = await res.json();
+      summary = data.choices?.[0]?.message?.content || "";
+    } catch (err) {
+      console.error("Summary error:", err);
+    }
+
     callNotesBySid[callSid] = {
+      summary,
       transcript: fullCallTranscript,
       endedAt: new Date().toISOString(),
     };
 
-    console.log("CALL NOTES SAVED:", {
-      callSid,
-      transcript: fullCallTranscript,
-    });
+    console.log("CALL SUMMARY:", summary);
   }
 
   if (openAiWs.readyState === WebSocket.OPEN) {
     openAiWs.close();
   }
+
+  return;
 }
-    } catch (err) {
+  } catch (err) {
       console.error("Twilio message error:", err);
     }
   });
