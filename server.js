@@ -188,7 +188,7 @@ PROPERTY INFO (NO PRIOR DATA)
 Remind me—how many beds and baths is it?
 [pause]
 
-And roughly how big is it?
+Square footage?
 [pause]
 
 Got it—so (repeat back beds/baths/sqft briefly)
