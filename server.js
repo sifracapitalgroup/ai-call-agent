@@ -218,7 +218,7 @@ MOTIVATION
 Got it…
 [pause]
 
-So what would you ideally want to happen with it?
+In a perfect world, whats your ideal scenario with this property?
 
 --------------------------------------------------
 
