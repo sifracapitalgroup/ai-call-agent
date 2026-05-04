@@ -258,7 +258,6 @@ Got it—I hear you. Just trying to understand where you’re at
 POSITIONING (NON-SALESY)
 
 Yeah—usually when I do these, I just keep it straightforward…
-No repairs, flexible timing… just depends what works best for you
 
 --------------------------------------------------
 
