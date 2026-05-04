@@ -237,7 +237,7 @@ Then continue naturally.
 
 TIMELINE
 
-If everything lined up… when would you actually want to be done?
+If everything lined up… whats your ideal timeframe in regards to closing?
 
 If unclear:
 Is that more like 30 days, or closer to a couple months?
