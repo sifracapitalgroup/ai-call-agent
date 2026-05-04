@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 let currentCallLead = {};
+let callNotesBySid = {};
 
 if (!OPENAI_API_KEY) {
   throw new Error("Missing OPENAI_API_KEY in .env");
@@ -375,6 +376,23 @@ app.get("/", (req, res) => {
   res.status(200).send("Realtime phone agent is running.");
 });
 
+app.get("/call-notes/:callSid", (req, res) => {
+  const notes = callNotesBySid[req.params.callSid];
+
+  if (!notes) {
+    return res.status(404).json({
+      success: false,
+      error: "No notes found for this Call SID",
+    });
+  }
+
+  res.json({
+    success: true,
+    callSid: req.params.callSid,
+    notes,
+  });
+});
+
 app.all("/voice", (req, res) => {
   const publicBaseUrl = getPublicBaseUrl(req);
   const wsUrl = publicBaseUrl.replace(/^http/i, "ws") + "/media-stream";
@@ -515,6 +533,7 @@ function normalizeAddressForSpeech(address) {
   let responseStartTimestamp = null;
   let lastAssistantItem = null;
   let assistantTranscript = "";
+  let fullCallTranscript = "";
   let callEndingScheduled = false;
   let leadFirst_name = currentCallLead.first_name || "there";
   let leadAddress = normalizeAddressForSpeech(
@@ -798,6 +817,8 @@ if (event.type === "response.text.delta" && event.delta) {
 if (event.type === "response.text.done") {
   console.log("AI SAID:", assistantText);
 
+fullCallTranscript += `AI: ${assistantText}\n`; // <-- ADD THIS LINE
+
   speakWithElevenLabs(assistantText);
 
 console.log("CHECKING END CALL:", assistantText);
@@ -872,16 +893,28 @@ if (event.type === "input_audio_buffer.speech_started") {
         return;
       }
 
-      if (msg.event === "stop") {
-        console.log("Twilio stream stopped:", {
-          streamSid,
-          callSid,
-        });
+     if (msg.event === "stop") {
+  console.log("Twilio stream stopped:", {
+    streamSid,
+    callSid,
+  });
 
-        if (openAiWs.readyState === WebSocket.OPEN) {
-          openAiWs.close();
-        }
-      }
+  if (callSid) {
+    callNotesBySid[callSid] = {
+      transcript: fullCallTranscript,
+      endedAt: new Date().toISOString(),
+    };
+
+    console.log("CALL NOTES SAVED:", {
+      callSid,
+      transcript: fullCallTranscript,
+    });
+  }
+
+  if (openAiWs.readyState === WebSocket.OPEN) {
+    openAiWs.close();
+  }
+}
     } catch (err) {
       console.error("Twilio message error:", err);
     }
