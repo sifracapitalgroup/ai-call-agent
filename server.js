@@ -679,11 +679,11 @@ openAiWs.on("open", async () => {
       response: {
         modalities: ["text"],
         instructions: `
-Say ONLY the opening below.
-Do NOT add anything else.
-Do NOT explain.
-Do NOT continue past the question.
-After asking the question, Pause and wait for the seller to respond. Continue naturally after they speak.
+Say exactly this. No extra words. No filler. No hesitation.
+
+Do NOT say "uh", "um", or any filler.
+
+Speak clean, direct, and confident.
 
 Opening:
 
@@ -693,9 +693,8 @@ Hey ${leadFirst_name}?
 
 This is Daniel.
 
-I'm calling about your place on ${leadAddress}...
+I'm calling in regards to ${leadAddress} - Would you potentially be open to selling?
 
-Would you potentially be open to selling?
 `
       },
     })
