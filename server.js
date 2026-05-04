@@ -626,34 +626,36 @@ openAiWs.on("open", async () => {
   await sendSessionUpdate();
 
   openAiWs.send(
-  JSON.stringify({
-    type: "response.create",
-    response: {
-      modalities: ["text"],
-      instructions: `
-Speak ONLY in English.
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["text"],
+        instructions: `
+Say ONLY the opening below.
+Do NOT add anything else.
+Do NOT explain.
+Do NOT continue past the question.
+After asking the question, STOP speaking and wait for the seller.
 
-hey ${leadFirst_name}…??
+Opening:
 
-...
+Hey ${leadFirst_name}?
 
-this is daniel.
+[pause]
 
-i’m calling about your property on ${leadAddress}…
+This is Daniel.
 
-would you be open to selling
-if the number made sense?
+[pause]
 
-Rules:
-- You are Daniel
-- Do not say any company
-- Do not change the name or address
+I was calling about your place on ${leadAddress}...
 
+[pause]
+
+If the numbers made sense... is that something you'd even consider?
 `
-    },
-  })
-);
-
+      },
+    })
+  );
 });
 
 async function speakWithElevenLabs(text) {
