@@ -619,9 +619,20 @@ Use the data only to guide better questions.
         silence_duration_ms: 1050,
       },
       input_audio_format: "g711_ulaw",
-      instructions: SYSTEM_PROMPT + "\n\n" + leadContext,
+      instructions: SYSTEM_PROMPT + `
+
+CRITICAL EXECUTION RULE:
+
+- LESS is MORE, direct sentences
+- Do NOT add extra words
+- Do NOT add filler phrases
+- Follow the call flow tightly
+- One question at a time
+If a sentence can be shorter, make it shorter. 
+
+` + leadContext,
       modalities: ["text"],
-      temperature: 0.60,
+      temperature: 0.50,
     },
   };
 
