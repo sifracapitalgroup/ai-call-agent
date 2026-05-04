@@ -624,8 +624,6 @@ Use the data only to guide better questions.
 CRITICAL EXECUTION RULE:
 
 - LESS is MORE, direct sentences
-- Do NOT add extra words
-- Do NOT add filler phrases
 - Follow the call flow tightly
 - One question at a time
 If a sentence can be shorter, make it shorter. 
