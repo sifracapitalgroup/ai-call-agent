@@ -641,17 +641,17 @@ Opening:
 
 Hey ${leadFirst_name}?
 
-[pause]
+.....
 
 This is Daniel.
 
-[pause]
+......
 
 I was calling about your place on ${leadAddress}...
 
 [pause]
 
-If the numbers made sense... is that something you'd even consider?
+Considering the numbers made sense... is that something you'd consider?
 `
       },
     })
