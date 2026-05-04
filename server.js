@@ -592,9 +592,9 @@ Use the data only to guide better questions.
     session: {
       turn_detection: {
         type: "server_vad",
-        threshold: 0.9,
-        prefix_padding_ms: 500,
-        silence_duration_ms: 1150,
+        threshold: 0.97,
+        prefix_padding_ms: 700,
+        silence_duration_ms: 3150,
       },
       input_audio_format: "g711_ulaw",
       instructions: SYSTEM_PROMPT + "\n\n" + leadContext,
@@ -773,7 +773,7 @@ if (event.type === "input_audio_buffer.speech_started") {
 
   setTimeout(() => {
     clearTwilioAudio();
-  }, 250);
+  }, 450);
 }
 
     // safety: end-call checks
