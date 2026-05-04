@@ -490,8 +490,8 @@ function normalizeAddressForSpeech(address) {
     .trim()
 );
 
-if (currentCallLead.city || currentCallLead.state) {
-  leadAddress += ` in ${currentCallLead.city || ""}${currentCallLead.city && currentCallLead.state ? ", " : ""}${currentCallLead.state || ""}`;
+if (currentCallLead.city) {
+  leadAddress += ` in ${currentCallLead.city}`;
 }
   let leadCity = currentCallLead.city || "";
   
