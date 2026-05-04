@@ -117,15 +117,15 @@ CALL FLOW (FOLLOW NATURALLY, NOT ROBOTICALLY)
 OPEN
 
 Hey (Name)?
-[pause]
+
 
 This is Daniel.
-[pause]
+
 
 I was calling about your place on (Street in City)…
-[pause]
 
-If the numbers made sense… is that something you’d even consider?
+
+Would you potentially be open to selling?
 
 --------------------------------------------------
 
@@ -660,11 +660,11 @@ Hey ${leadFirst_name}?
 
 .....
 
-Daniel speaking.
+This is Daniel.
 
 I'm calling about your place on ${leadAddress}...
 
-Considering the numbers made sense... is that something you'd consider?
+Would you potentially be open to selling?
 `
       },
     })
