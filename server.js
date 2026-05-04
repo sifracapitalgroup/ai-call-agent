@@ -616,12 +616,12 @@ Use the data only to guide better questions.
         type: "server_vad",
         threshold: 0.97,
         prefix_padding_ms: 700,
-        silence_duration_ms: 3150,
+        silence_duration_ms: 1050,
       },
       input_audio_format: "g711_ulaw",
       instructions: SYSTEM_PROMPT + "\n\n" + leadContext,
       modalities: ["text"],
-      temperature: 0.65,
+      temperature: 0.60,
     },
   };
 
