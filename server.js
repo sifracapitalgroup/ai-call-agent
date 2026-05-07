@@ -409,6 +409,72 @@ app.all("/voice", (req, res) => {
   res.type("text/xml").send(twiml);
 });
 
+async function updateGHL(outcome, summary, phoneOverride) {
+  try {
+    const response = await fetch("https://services.leadconnectorhq.com/contacts/upsert", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+        Version: "2021-07-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        locationId: process.env.GHL_LOCATION_ID,
+        phone: phoneOverride,
+        customFields: [
+          {
+            key: "ai_call_outcome",
+            field_value: outcome,
+          },
+          {
+            key: "call_notes",
+            field_value: summary,
+          },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+    console.log("GHL UPDATED:", data);
+  } catch (err) {
+    console.error("GHL UPDATE ERROR:", err);
+  }
+}
+
+app.post("/call-status", async (req, res) => {
+  try {
+    console.log("CALL STATUS:", req.body);
+
+const callStatus = req.body.CallStatus;
+const callDuration = Number(req.body.Duration || req.body.CallDuration || 0);
+const phone = req.body.To || req.body.Called;
+
+console.log("PHONE FROM TWILIO:", phone);
+console.log("CALL DURATION USED:", callDuration);
+
+if (
+  callStatus === "no-answer" ||
+  callStatus === "busy" ||
+  callStatus === "failed" ||
+  (callStatus === "completed" && callDuration <= 15)
+) {
+  console.log("TRIGGERING GHL UPDATE FOR NO ANSWER");
+
+  await updateGHL(
+    "no_answer_voicemail",
+    `Call ended with status: ${callStatus} and duration ${callDuration} seconds.`,
+    phone
+  );
+}
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("CALL STATUS ERROR:", err);
+    res.sendStatus(500);
+  }
+});
+
+
 app.post("/recording", (req, res) => {
   const recordingUrl = req.body.RecordingUrl + ".mp3";
 
@@ -486,7 +552,8 @@ app.post("/start-call", async (req, res) => {
   to: cleanPhone,
   from: process.env.TWILIO_PHONE_NUMBER,
   url: `${publicBaseUrl}/voice`,
-
+  statusCallback: `${publicBaseUrl}/call-status`,
+  statusCallbackEvent: ["completed", "no-answer", "busy",  "failed"],
   record: true,
   recordingChannels: "dual",
   recordingStatusCallback: `${publicBaseUrl}/recording`,
@@ -511,6 +578,8 @@ app.post("/start-call", async (req, res) => {
 
 wss.on("connection", (twilioWs) => {
   console.log("Twilio websocket connected");
+
+
 
 function normalizeAddressForSpeech(address) {
   if (!address) return "";
@@ -579,11 +648,118 @@ if (currentCallLead.city) {
   return hardGoodbye || clearClose;
 }
 
+async function classifyCall(transcript) {
+  try {
+  if (!transcript || transcript.trim().length < 10) {
+  return {
+    ai_call_outcome: "no_answer_voicemail",
+    call_summary: "No answer or voicemail reached.",
+  };
+}
+
+const lowerTranscript = transcript.toLowerCase();
+
+const rejectionPhrases = [
+  "not interested",
+  "no thanks",
+  "i'm good",
+  "im good",
+  "stop calling",
+  "remove me",
+  "take me off",
+  "don't call",
+  "do not call",
+  "not selling",
+  "already sold",
+];
+
+if (rejectionPhrases.some((phrase) => lowerTranscript.includes(phrase))) {
+  return {
+    ai_call_outcome: "not_interested",
+    call_summary: "Seller clearly rejected the call or said they are not interested.",
+  };
+}
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `
+You classify real estate seller calls.
+
+Return ONLY valid JSON with:
+{
+  "ai_call_outcome": "no_answer_voicemail | follow_up | interested | not_interested",
+  "call_summary": "short summary"
+}
+
+Rules:
+- no_answer_voicemail = no meaningful conversation, voicemail, no answer, immediate hangup
+- interested = seller is open to selling, gives price/timeline/condition, wants an offer, asks for next steps
+- not_interested = ANY clear rejection, including:
+  "not interested"
+  "stop calling"
+  "remove me"
+  "already sold"
+  "take me off your list"
+- follow_up = seller is unsure, says maybe later, asks to call back, needs time, or conversation is unclear
+
+CRITICAL:
+If the seller says "not interested" return "not_interested".
+
+If uncertain, choose follow_up.
+`,
+          },
+          {
+            role: "user",
+            content: transcript,
+          },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+    const parsed = JSON.parse(data.choices[0].message.content);
+
+    const allowed = [
+      "no_answer_voicemail",
+      "follow_up",
+      "interested",
+      "not_interested",
+    ];
+
+    if (!allowed.includes(parsed.ai_call_outcome)) {
+      parsed.ai_call_outcome = "follow_up";
+    }
+
+    return parsed;
+  } catch (err) {
+    console.error("CLASSIFY CALL ERROR:", err);
+
+    return {
+      ai_call_outcome: "follow_up",
+      call_summary: "Call ended, but classification failed.",
+    };
+  }
+}
+
 function scheduleEndCall(reason) {
   if (callEndingScheduled) return;
   callEndingScheduled = true;
 
   console.log("AUTO ENDING CALL:", reason);
+
+ classifyCall(fullTranscript).then((result) => {
+updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
+  });
 
   setTimeout(async () => {
     try {
@@ -803,6 +979,8 @@ async function speakWithElevenLabs(text) {
 }
 // ✅ THEN this
 let assistantText = "";
+let fullTranscript = "";
+let sellerSpoke = false;
 
 // ✅ THEN your OpenAI handler
 
@@ -830,11 +1008,24 @@ openAiWs.on("message", (data) => {
       assistantText += event.delta;
     }
 
+if (event.type === "conversation.item.input_audio_transcription.completed") {
+  sellerSpoke = true;
+  fullTranscript += `\nSeller: ${event.transcript}`;
+  console.log("SELLER SAID:", event.transcript);
+}
+
+    // collect AI streaming text
+    if (event.type === "response.text.delta" && event.delta) {
+      assistantText += event.delta;
+    }
+
 // full message finished
 if (event.type === "response.text.done") {
   console.log("AI SAID:", assistantText);
 
-fullCallTranscript += `AI: ${assistantText}\n`; // <-- ADD THIS LINE
+
+  fullTranscript += `\nAI: ${assistantText}`;
+  fullCallTranscript += `AI: ${assistantText}\n`;
 
   speakWithElevenLabs(assistantText);
 
@@ -916,6 +1107,10 @@ if (event.type === "input_audio_buffer.speech_started") {
     callSid,
   });
 
+
+
+
+
   if (callSid) {
     const summaryPrompt = `
 Summarize this real estate call in ONE short line.
@@ -967,6 +1162,25 @@ ${fullCallTranscript}
 
     console.log("CALL SUMMARY:", summary);
   }
+
+if (!sellerSpoke) {
+updateGHL(
+  "no_answer_voicemail",
+  "No answer or voicemail reached. No meaningful seller response.",
+  currentCallLead.phone
+);
+} else if (!fullTranscript || fullTranscript.length < 10) {
+updateGHL(
+  "follow_up",
+  "Seller answered but hung up before a full conversation.",
+  currentCallLead.phone
+);
+} else {
+  classifyCall(fullTranscript).then((result) => {
+updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
+  });
+}
+
 
   if (openAiWs.readyState === WebSocket.OPEN) {
     openAiWs.close();
