@@ -1057,7 +1057,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
       try {
 
-        await client.calls(callSid).update({
+       await twilioClient.calls(callSid).update({
           status: "completed"
         });
 
