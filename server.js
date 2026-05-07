@@ -849,25 +849,32 @@ If a sentence can be shorter, make it shorter.
     );
   }
 
-  function interruptAssistant() {
-    if (!lastAssistantItem || responseStartTimestamp === null) return;
+ function interruptAssistant() {
 
-    const elapsedMs = latestMediaTimestamp - responseStartTimestamp;
-
-    openAiWs.send(
-      JSON.stringify({
-        type: "conversation.item.truncate",
-        item_id: lastAssistantItem,
-        content_index: 0,
-        audio_end_ms: elapsedMs,
-      })
-    );
-
-    clearTwilioAudio();
-
-    lastAssistantItem = null;
-    responseStartTimestamp = null;
+  // DO NOT interrupt during opener
+  if (openingMessageActive) {
+    console.log("IGNORING INTERRUPTION DURING OPENER");
+    return;
   }
+
+  if (!lastAssistantItem || responseStartTimestamp === null) return;
+
+  const elapsedMs = latestMediaTimestamp - responseStartTimestamp;
+
+  openAiWs.send(
+    JSON.stringify({
+      type: "conversation.item.truncate",
+      item_id: lastAssistantItem,
+      content_index: 0,
+      audio_end_ms: elapsedMs,
+    })
+  );
+
+  clearTwilioAudio();
+
+  lastAssistantItem = null;
+  responseStartTimestamp = null;
+}
 
 openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
@@ -968,8 +975,9 @@ async function speakWithElevenLabs(text) {
 }
 // ✅ THEN this
 let assistantText = "";
-let fullTranscript = "";
+let fullTranscript = "";so 
 let sellerSpoke = false;
+let openingMessageActive = false;
 
 // ✅ THEN your OpenAI handler
 
