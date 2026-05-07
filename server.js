@@ -768,9 +768,9 @@ function scheduleEndCall(reason) {
       if (callSid) {
         console.log("FORCE END CALL:", callSid);
 
-        await twilioClient.calls(callSid).update({
-          status: "completed",
-        });
+        twilioClient.calls(callSid).update({
+  status: "completed"
+});
       }
     } catch (err) {
       console.error("FORCE END CALL ERROR:", err);
