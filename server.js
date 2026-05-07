@@ -1036,41 +1036,36 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   if (isVoicemail) {
 
-    console.log("VOICEMAIL DETECTED");
+  console.log("VOICEMAIL DETECTED");
 
-    fullTranscript += `\nVOICEMAIL: ${transcript}`;
-    fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
+  fullTranscript += `\nVOICEMAIL: ${transcript}`;
+  fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
 
-    // STOP any active AI response
-    clearTwilioAudio();
+  // STOP OPENAI RESPONSE
+  openAiWs.send(JSON.stringify({
+    type: "response.cancel"
+  }));
 
-    // LEAVE VOICEMAIL
-    const voicemailMessage =
-      "Hey this is Daniel. Just giving you a quick call about your property. Give me a call back when you get a chance.";
+  // CLEAR ANY AUDIO
+  clearTwilioAudio();
 
-    speakWithElevenLabs(voicemailMessage);
+  // END CALL IMMEDIATELY
+  try {
 
-    // HANG UP after voicemail finishes
-    setTimeout(async () => {
+    await twilioClient.calls(callSid).update({
+      status: "completed"
+    });
 
-      console.log("ENDING CALL AFTER VOICEMAIL");
+    console.log("VOICEMAIL CALL ENDED");
 
-      try {
+  } catch (err) {
 
-       await twilioClient.calls(callSid).update({
-          status: "completed"
-        });
+    console.error("FAILED TO END VOICEMAIL CALL:", err);
 
-      } catch (err) {
-
-        console.error("FAILED TO END VOICEMAIL CALL:", err);
-
-      }
-
-    }, 8000);
-
-    return;
   }
+
+  return;
+}
 
     // =========================
   // WRONG NUMBER DETECTION
