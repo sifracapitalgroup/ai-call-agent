@@ -480,14 +480,58 @@ if (
   }
 });
 
+app.post("/recording", async (req, res) => {
+  try {
+    const recordingUrl = req.body.RecordingUrl + ".mp3";
+    const callSid = req.body.CallSid;
 
-app.post("/recording", (req, res) => {
-  const recordingUrl = req.body.RecordingUrl + ".mp3";
+    // THIS IS THE IMPORTANT PART
+    const phone =
+      req.body.To ||
+      req.body.Called ||
+      currentCallLead.phone;
 
-  console.log("Recording ready:", recordingUrl);
-  console.log("Call SID:", req.body.CallSid);
+    console.log("Recording ready:", recordingUrl);
+    console.log("Call SID:", callSid);
+    console.log("PHONE:", phone);
 
-  res.sendStatus(200);
+    const response = await fetch(
+      "https://services.leadconnectorhq.com/contacts/upsert",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+          Version: "2021-07-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          locationId: process.env.GHL_LOCATION_ID,
+          phone: phone,
+
+          customFields: [
+            {
+              key: "contact.twilio_call_sid",
+              field_value: callSid,
+            },
+            {
+              key: "contact.twilio_recording_url",
+              field_value: recordingUrl,
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    console.log("GHL RECORDING UPDATE:", data);
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error("RECORDING ERROR:", err);
+    res.sendStatus(500);
+  }
 });
 
 app.post("/start-call", async (req, res) => {
