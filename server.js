@@ -970,6 +970,7 @@ async function speakWithElevenLabs(text) {
 let assistantText = "";
 let fullTranscript = "";
 let sellerSpoke = false;
+let wrongNumberDetected = false;
 
 // ✅ THEN your OpenAI handler
 
@@ -1063,6 +1064,47 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
     return;
   }
 
+    // =========================
+  // WRONG NUMBER DETECTION
+  // =========================
+
+  const wrongNumberPhrases = [
+    "wrong number",
+    "you have the wrong number",
+    "wrong person",
+    "not the right number",
+    "you called the wrong number",
+    "doesn't live here",
+    "does not live here",
+    "not this person",
+    "you got the wrong person"
+  ];
+
+  const isWrongNumber = wrongNumberPhrases.some(phrase =>
+    lowerTranscript.includes(phrase)
+  );
+
+  if (isWrongNumber) {
+    console.log("WRONG NUMBER DETECTED");
+
+    wrongNumberDetected = true;
+
+    fullTranscript += `\nWRONG NUMBER: ${transcript}`;
+    fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
+
+    updateGHL(
+      "ai_wrong_number",
+      "Contact stated this is a wrong number.",
+      currentCallLead.phone
+    );
+
+    clearTwilioAudio();
+
+    scheduleEndCall("wrong number");
+
+    return;
+  }
+  
   // =========================
   // NORMAL HUMAN SPEECH
   // =========================
@@ -1224,7 +1266,9 @@ ${fullCallTranscript}
     console.log("CALL SUMMARY:", summary);
   }
 
-if (!sellerSpoke) {
+if (wrongNumberDetected) {
+  console.log("Skipping final classification because wrong number was already detected.");
+} else if (!sellerSpoke) {
 updateGHL(
   "no_answer_voicemail",
   "No answer or voicemail reached. No meaningful seller response.",
