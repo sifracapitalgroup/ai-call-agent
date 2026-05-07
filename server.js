@@ -1003,10 +1003,6 @@ openAiWs.on("message", (data) => {
       }
     }
 
-    // collect streaming text
-    if (event.type === "response.text.delta" && event.delta) {
-      assistantText += event.delta;
-    }
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
   sellerSpoke = true;
@@ -1042,6 +1038,8 @@ if (shouldEndCall(assistantText)) {
     // user starts speaking → stop any current playback
 if (event.type === "input_audio_buffer.speech_started") {
   console.log("Possible user speech detected");
+
+ interruptAssistant();
 
   setTimeout(() => {
     clearTwilioAudio();
