@@ -510,11 +510,11 @@ app.post("/recording", async (req, res) => {
 
           customFields: [
             {
-              key: "contact.twilio_call_sid",
+              key: "twilio_call_sid",
               field_value: callSid,
             },
             {
-              key: "contact.twilio_recording_url",
+              key: "twilio_recording_url",
               field_value: recordingUrl,
             },
           ],
@@ -598,7 +598,7 @@ app.post("/start-call", async (req, res) => {
       process.env.PUBLIC_BASE_URL?.replace(/\/$/, "") ||
       `https://${req.headers.host}`;
 
-    const call = twilioClient.calls.create({
+    const call = await twilioClient.calls.create({
   to: cleanPhone,
   from: process.env.TWILIO_PHONE_NUMBER,
   url: `${publicBaseUrl}/voice`,
