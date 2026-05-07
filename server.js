@@ -979,7 +979,6 @@ let fullTranscript = "";so
 let sellerSpoke = false;
 let openingMessageActive = false;
 let wrongNumberDetected = false;
->>>>>>> cef28ab5393c35df1724a12c73c4984c3659b395
 
 // ✅ THEN your OpenAI handler
 
