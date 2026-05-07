@@ -994,10 +994,84 @@ openAiWs.on("message", (data) => {
 
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
+
   sellerSpoke = true;
-  fullTranscript += `\nSeller: ${event.transcript}`;
-  console.log("SELLER SAID:", event.transcript);
+
+  const transcript = (event.transcript || "").trim();
+  const lowerTranscript = transcript.toLowerCase();
+
+  console.log("SELLER SAID:", transcript);
+
+  // =========================
+  // VOICEMAIL DETECTION
+  // =========================
+
+  const voicemailPhrases = [
+    "your call has been forwarded",
+    "automatic voice message system",
+    "please leave a message",
+    "record your message",
+    "at the tone",
+    "mailbox is full",
+    "google voice subscriber",
+    "is not available",
+    "can't take your call",
+    "leave your name and number",
+    "voice mailbox",
+    "voicemail"
+  ];
+
+  const isVoicemail = voicemailPhrases.some(phrase =>
+    lowerTranscript.includes(phrase)
+  );
+
+  if (isVoicemail) {
+
+    console.log("VOICEMAIL DETECTED");
+
+    fullTranscript += `\nVOICEMAIL: ${transcript}`;
+    fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
+
+    // STOP any active AI response
+    clearTwilioAudio();
+
+    // LEAVE VOICEMAIL
+    const voicemailMessage =
+      "Hey this is Daniel. Just giving you a quick call about your property. Give me a call back when you get a chance.";
+
+    speakWithElevenLabs(voicemailMessage);
+
+    // HANG UP after voicemail finishes
+    setTimeout(async () => {
+
+      console.log("ENDING CALL AFTER VOICEMAIL");
+
+      try {
+
+        await client.calls(callSid).update({
+          status: "completed"
+        });
+
+      } catch (err) {
+
+        console.error("FAILED TO END VOICEMAIL CALL:", err);
+
+      }
+
+    }, 8000);
+
+    return;
+  }
+
+  // =========================
+  // NORMAL HUMAN SPEECH
+  // =========================
+
+ fullTranscript += `\nSeller: ${transcript}`;
+fullCallTranscript += `SELLER: ${transcript}\n`;
+
 }
+
 
     // collect AI streaming text
     if (event.type === "response.text.delta" && event.delta) {
