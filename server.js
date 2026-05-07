@@ -463,7 +463,6 @@ if (
   callStatus === "no-answer" ||
   callStatus === "busy" ||
   callStatus === "failed" ||
-  (callStatus === "completed" && callDuration <= 15)
 ) {
   console.log("TRIGGERING GHL UPDATE FOR NO ANSWER");
 
@@ -764,10 +763,6 @@ function scheduleEndCall(reason) {
 
   console.log("AUTO ENDING CALL:", reason);
 
- classifyCall(fullTranscript).then((result) => {
-updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
-  });
-
   setTimeout(async () => {
     try {
       if (callSid) {
@@ -778,8 +773,10 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
         });
       }
     } catch (err) {
-      console.error("TWILIO END ERROR:", err);
+      console.error("FORCE END CALL ERROR:", err);
     }
+  }, 1500);
+}
 
     try {
       if (twilioWs.readyState === WebSocket.OPEN) {
