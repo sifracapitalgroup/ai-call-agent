@@ -462,7 +462,7 @@ console.log("CALL DURATION USED:", callDuration);
 if (
   callStatus === "no-answer" ||
   callStatus === "busy" ||
-  callStatus === "failed" ||
+  callStatus === "failed"
 ) {
   console.log("TRIGGERING GHL UPDATE FOR NO ANSWER");
 
