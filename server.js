@@ -977,7 +977,6 @@ async function speakWithElevenLabs(text) {
 let assistantText = "";
 let fullTranscript = "";so 
 let sellerSpoke = false;
-<<<<<<< HEAD
 let openingMessageActive = false;
 =======
 let wrongNumberDetected = false;
