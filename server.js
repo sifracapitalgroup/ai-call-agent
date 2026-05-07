@@ -778,21 +778,6 @@ function scheduleEndCall(reason) {
   }, 1500);
 }
 
-    try {
-      if (twilioWs.readyState === WebSocket.OPEN) {
-        twilioWs.close();
-      }
-    } catch (err) {}
-
-    try {
-      if (openAiWs.readyState === WebSocket.OPEN) {
-        openAiWs.close();
-      }
-    } catch (err) {}
-
-  }, 4000); // shorter = cleaner
-}
-
  async function sendSessionUpdate() {
   const leadContext = `
 CURRENT LEAD CONTEXT:
