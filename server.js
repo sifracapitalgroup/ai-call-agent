@@ -554,7 +554,7 @@ app.post("/start-call", async (req, res) => {
       process.env.PUBLIC_BASE_URL?.replace(/\/$/, "") ||
       `https://${req.headers.host}`;
 
-    const call = await twilioClient.calls.create({
+    const call = twilioClient.calls.create({
   to: cleanPhone,
   from: process.env.TWILIO_PHONE_NUMBER,
   url: `${publicBaseUrl}/voice`,
@@ -1052,7 +1052,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   // END CALL IMMEDIATELY
   try {
 
-    await twilioClient.calls(callSid).update({
+    twilioClient.calls(callSid).update({
       status: "completed"
     });
 
