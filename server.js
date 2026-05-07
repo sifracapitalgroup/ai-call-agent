@@ -524,7 +524,7 @@ app.post("/recording", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("GHL RECORDING UPDATE:", data);
+    console.log("GHL RECORDING UPDATE:", JSON.stringify(data, null, 2));
 
     res.sendStatus(200);
 
