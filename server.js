@@ -879,6 +879,13 @@ If a sentence can be shorter, make it shorter.
 openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
+  openingMessageActive = true;
+
+  setTimeout(() => {
+  openingMessageActive = false;
+  console.log("OPENER INTERRUPTION ENABLED");
+}, 7000);
+  
   await sendSessionUpdate();
 
   openAiWs.send(
