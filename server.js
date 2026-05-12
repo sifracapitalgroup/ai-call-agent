@@ -849,9 +849,10 @@ Use the data only to guide better questions.
 
   console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
 
-  const sessionUpdate = {
-    type: "session.update",
-    session: {
+ const sessionUpdate = {
+  type: "session.update",
+  session: {
+    type: "realtime",
       turn_detection: {
         type: "server_vad",
         threshold: 0.97,
@@ -873,7 +874,6 @@ CRITICAL EXECUTION RULE:
 If a sentence can be shorter, make it shorter. 
 
 ` + leadContext,
-      modalities: ["text"],
       temperature: 0.60,
     },
   };
@@ -935,7 +935,6 @@ openAiWs.on("open", async () => {
     JSON.stringify({
       type: "response.create",
       response: {
-        modalities: ["text"],
         instructions: `
 Say exactly this. No extra words. No filler. No hesitation.
 
