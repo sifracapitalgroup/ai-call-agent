@@ -671,14 +671,13 @@ if (currentCallLead.city) {
 
 
   const openAiWs = new WebSocket(
-    "wss://api.openai.com/v1/realtime?model=gpt-realtime",
-    {
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "OpenAI-Beta": "realtime=v1",
-      },
-    }
-  );
+  "wss://api.openai.com/v1/realtime?model=gpt-realtime",
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+  }
+);
 
  function shouldEndCall(text) {
   const t = String(text || "").toLowerCase();
