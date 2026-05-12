@@ -853,6 +853,7 @@ Use the data only to guide better questions.
   type: "session.update",
   session: {
     type: "realtime",
+     output_modalities: ["text"],
       turn_detection: {
         type: "server_vad",
         threshold: 0.97,
