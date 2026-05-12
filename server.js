@@ -855,10 +855,7 @@ Use the data only to guide better questions.
     type: "realtime",
      output_modalities: ["text"],
       turn_detection: {
-        type: "server_vad",
-        threshold: 0.97,
-        prefix_padding_ms: 700,
-        silence_duration_ms: 1050,
+    
       },
       input_audio_format: "g711_ulaw",
       input_audio_transcription: {
