@@ -578,6 +578,8 @@ wss.on("connection", (twilioWs) => {
   let hangupTaskScheduled = false;
   /** True from `response.create` for the opener until `response.done` for that response. */
   let openerInProgress = false;
+  /** Server `response.id` for the opener (from `response.created`) — avoids unlocking on unrelated `response.done`. */
+  let openerResponseId = null;
   /** Hard mutex: no inbound audio, VAD, transcription, clears, or interrupts until opener `response.done`. */
   let openerLock = true;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
@@ -943,6 +945,7 @@ console.log(
 
     console.log("OPENER response.create →", source);
 
+    openerResponseId = null;
     openerInProgress = true;
 
     openAiWs.send(
@@ -1009,6 +1012,12 @@ openAiWs.on("message", (data) => {
         !openerResponseSent
       ) {
         sendOpenerResponseOnce("session_updated_ack");
+      }
+    }
+
+    if (event.type === "response.created") {
+      if (openerInProgress && !openerResponseId && event.response?.id) {
+        openerResponseId = event.response.id;
       }
     }
 
@@ -1103,6 +1112,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   callState = CALL_STATE.VOICEMAIL;
   openerInProgress = false;
+  openerResponseId = null;
 
   fullTranscript += `\nVOICEMAIL: ${transcript}`;
   fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
@@ -1168,6 +1178,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     callState = CALL_STATE.WRONG_NUMBER;
     openerInProgress = false;
+    openerResponseId = null;
 
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
@@ -1274,16 +1285,61 @@ if (event.type === "input_audio_buffer.speech_started") {
 
     // safety: end-call checks
     if (event.type === "response.done") {
-      if (openerInProgress) {
-        openerInProgress = false;
+      const resp = event.response;
+      const rid = resp?.id;
+      const status = resp?.status ?? "";
+      const terminal =
+        status === "completed" ||
+        status === "cancelled" ||
+        status === "failed" ||
+        status === "incomplete";
 
+      const openerDoneForThisResponse =
+        openerInProgress &&
+        terminal &&
+        (openerResponseId ? rid === openerResponseId : Boolean(rid));
+
+      if (openerDoneForThisResponse) {
+        openerInProgress = false;
+        openerResponseId = null;
         openerLock = false;
 
-        callState = CALL_STATE.LISTENING;
+        if (callState === CALL_STATE.OPENING) {
+          callState = CALL_STATE.LISTENING;
+        }
 
-        console.log("OPENER FULLY COMPLETED — LOCK RELEASED");
+        console.log("OPENER FULLY COMPLETED — LOCK RELEASED", status);
 
-        sendTurnDetectionInterruptResponse(true);
+        // Defer: an immediate `session.update` can race Twilio buffer drain / final audio frames.
+        setTimeout(() => sendTurnDetectionInterruptResponse(true), 250);
+      } else if (openerInProgress && terminal && !rid) {
+        console.warn(
+          "OPENER response.done missing response.id — releasing lock to avoid stuck call"
+        );
+        openerInProgress = false;
+        openerResponseId = null;
+        openerLock = false;
+        if (callState === CALL_STATE.OPENING) {
+          callState = CALL_STATE.LISTENING;
+        }
+        setTimeout(() => sendTurnDetectionInterruptResponse(true), 250);
+      } else if (
+        openerInProgress &&
+        (openerResponseId ? rid === openerResponseId : Boolean(rid)) &&
+        !terminal
+      ) {
+        console.warn(
+          "OPENER response.done with unknown/missing status — releasing lock to avoid stuck call:",
+          status,
+          rid
+        );
+        openerInProgress = false;
+        openerResponseId = null;
+        openerLock = false;
+        if (callState === CALL_STATE.OPENING) {
+          callState = CALL_STATE.LISTENING;
+        }
+        setTimeout(() => sendTurnDetectionInterruptResponse(true), 250);
       }
 
       const text = JSON.stringify(event);
@@ -1334,7 +1390,8 @@ if (event.type === "input_audio_buffer.speech_started") {
 
   if (
     openAiWs.readyState === WebSocket.OPEN &&
-    !openerLock
+    !openerLock &&
+    callState !== CALL_STATE.OPENING
   ) {
     openAiWs.send(
       JSON.stringify({
@@ -1354,6 +1411,7 @@ if (event.type === "input_audio_buffer.speech_started") {
   });
 
   openerInProgress = false;
+  openerResponseId = null;
 
   if (openerFallbackTimer) {
     clearTimeout(openerFallbackTimer);
@@ -1460,6 +1518,7 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
     }
 
     openerInProgress = false;
+    openerResponseId = null;
 
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
@@ -1479,6 +1538,7 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
     }
 
     openerInProgress = false;
+    openerResponseId = null;
   });
 
   openAiWs.on("error", (err) => {
