@@ -1025,6 +1025,7 @@ let assistantText = "";
 let fullTranscript = ""; 
 let sellerSpoke = false;
 let openingMessageActive = false;
+let openerFinished = false;
 let wrongNumberDetected = false;
 
 // ✅ THEN your OpenAI handler
@@ -1241,6 +1242,10 @@ if (event.type === "input_audio_buffer.speech_started") {
 
       if (msg.event === "media") {
         latestMediaTimestamp = msg.media.timestamp;
+
+        if (openingMessageActive) {
+    return;
+  }
 
         if (openAiWs.readyState === WebSocket.OPEN) {
           openAiWs.send(
