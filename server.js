@@ -578,20 +578,11 @@ wss.on("connection", (twilioWs) => {
   let hangupTaskScheduled = false;
   /** True from `response.create` for the opener until `response.done` for that response. */
   let openerInProgress = false;
-  /** Hard mutex: no inbound audio, VAD, transcription, clears, or interrupts until opener `response.done`. */
-  let openerLock = true;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
   let openerResponseSent = false;
   let openerFallbackTimer = null;
-  /** True until first `session.updated` after our initial `session.update` (avoid opener before config applies). */
-  let openerSessionUpdatePendingAck = false;
-
-  /** While true, never cancel assistant audio or treat side-channel transcripts as voicemail/wrong-number. */
-  function isOpenerPlaybackProtected() {
-    return callState === CALL_STATE.OPENING || openerInProgress;
-  }
 
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime",
@@ -785,7 +776,7 @@ Use the data only to guide better questions.
   type: "session.update",
   session: {
   type: "realtime",
-  modalities: ["audio"],
+  output_modalities: ["audio"],
 
   instructions:
     openerBlock +
@@ -808,7 +799,9 @@ Use the data only to guide better questions.
         threshold: 0.97,
         prefix_padding_ms: 700,
         silence_duration_ms: 1050,
-        interrupt_response: false,
+        /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
+        create_response: false,
+        interrupt_response: true,
       }
     },
 
@@ -828,44 +821,11 @@ console.log(
   JSON.stringify(sessionUpdate, null, 2)
 );
 
-  openerSessionUpdatePendingAck = true;
+   
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
-  function sendTurnDetectionInterruptResponse(enabled) {
-    if (openAiWs.readyState !== WebSocket.OPEN) return;
-    openAiWs.send(
-      JSON.stringify({
-        type: "session.update",
-        session: {
-          type: "realtime",
-          audio: {
-            input: {
-              format: {
-                type: "audio/pcmu",
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.97,
-                prefix_padding_ms: 700,
-                silence_duration_ms: 1050,
-                create_response: false,
-                interrupt_response: enabled,
-              },
-            },
-          },
-        },
-      })
-    );
-    console.log("TURN_DETECTION interrupt_response:", enabled);
-  }
-
   function clearTwilioAudio() {
-    if (openerLock) {
-      console.log("CLEAR BLOCKED — opener lock active");
-      return;
-    }
-
     pendingTwilioMediaPayloads.length = 0;
 
     if (!streamSid) return;
@@ -929,8 +889,6 @@ console.log(
     if (openerResponseSent) return;
     if (openAiWs.readyState !== WebSocket.OPEN) return;
 
-    openerSessionUpdatePendingAck = false;
-
     openerResponseSent = true;
 
     if (openerFallbackTimer) {
@@ -953,8 +911,8 @@ console.log(
   }
 
  function interruptAssistant() {
-  if (openerLock) {
-    console.log("INTERRUPT BLOCKED — opener lock active");
+  if (openerInProgress || callState === CALL_STATE.OPENING) {
+    console.log("IGNORING INTERRUPTION DURING OPENER");
     return;
   }
 
@@ -986,10 +944,14 @@ openAiWs.on("open", async () => {
   
   await sendSessionUpdate();
 
+  setTimeout(() => {
+    sendOpenerResponseOnce("post_session_update_tick");
+  }, 200);
+
   openerFallbackTimer = setTimeout(() => {
     openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_opener_no_session_ack");
-  }, 1200);
+    sendOpenerResponseOnce("fallback_opener");
+  }, 1600);
   });
 
 let fullTranscript = ""; 
@@ -999,52 +961,27 @@ openAiWs.on("message", (data) => {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
 
-    if (event.type === "session.updated") {
-      if (
-        openerSessionUpdatePendingAck &&
-        callState === CALL_STATE.OPENING &&
-        !openerResponseSent
-      ) {
-        sendOpenerResponseOnce("session_updated_ack");
-      }
-    }
+    if (event.type === "response.output_audio.delta") {
 
-    const outputAudioDelta =
-      event.type === "response.output_audio.delta" ||
-      event.type === "response.audio.delta";
-    if (outputAudioDelta) {
-      const audioChunk = event.delta;
-      if (!audioChunk) {
-        console.warn("OPENAI audio delta event missing delta payload:", event.type);
-      } else {
-        console.log("AUDIO DELTA RECEIVED");
-      }
+  console.log("AUDIO DELTA RECEIVED");
 
-      if (event.item_id) {
-        lastAssistantItem = event.item_id;
-      }
+  if (event.item_id) {
+    lastAssistantItem = event.item_id;
+  }
 
-      if (
-        callState === CALL_STATE.LISTENING ||
-        callState === CALL_STATE.INTERRUPTING
-      ) {
-        callState = CALL_STATE.RESPONDING;
-      }
+  if (
+    callState === CALL_STATE.LISTENING ||
+    callState === CALL_STATE.INTERRUPTING
+  ) {
+    callState = CALL_STATE.RESPONDING;
+  }
 
-      if (!responseStartTimestamp) {
-        responseStartTimestamp = latestMediaTimestamp;
-      }
+  if (!responseStartTimestamp) {
+    responseStartTimestamp = latestMediaTimestamp;
+  }
 
-      forwardAssistantAudioToTwilio(audioChunk);
-    }
-
-    if (event.type === "conversation.interrupted") {
-      if (isOpenerPlaybackProtected()) {
-        console.warn(
-          "OPENAI conversation.interrupted during opener — opener should not be cut server-side; check Realtime session settings"
-        );
-      }
-    }
+  forwardAssistantAudioToTwilio(event.delta);
+}
 
     if (event.type === "conversation.item.created") {
       const item = event.item;
@@ -1061,10 +998,8 @@ openAiWs.on("message", (data) => {
 
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
-  if (openerLock) {
-    console.log("TRANSCRIPTION IGNORED DURING OPENER LOCK");
-    return;
-  }
+
+  sellerUtteranceDetected = true;
 
   const transcript = (event.transcript || "").trim();
   const lowerTranscript = transcript.toLowerCase();
@@ -1095,13 +1030,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   );
 
   if (isVoicemail) {
-    if (isOpenerPlaybackProtected()) {
-      console.log(
-        "VOICEMAIL phrase matched during opener — ignoring (must finish opener first)"
-      );
-      fullCallTranscript += `VOICEMAIL (ignored during opener): ${transcript}\n`;
-      return;
-    }
 
   console.log("VOICEMAIL DETECTED");
 
@@ -1110,8 +1038,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   fullTranscript += `\nVOICEMAIL: ${transcript}`;
   fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
-
-  sellerUtteranceDetected = true;
 
   // STOP OPENAI RESPONSE
   openAiWs.send(JSON.stringify({
@@ -1160,14 +1086,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   );
 
   if (isWrongNumber) {
-    if (isOpenerPlaybackProtected()) {
-      console.log(
-        "WRONG NUMBER phrase matched during opener — ignoring (must finish opener first)"
-      );
-      fullCallTranscript += `WRONG NUMBER (ignored during opener): ${transcript}\n`;
-      return;
-    }
-
     console.log("WRONG NUMBER DETECTED");
 
     callState = CALL_STATE.WRONG_NUMBER;
@@ -1175,8 +1093,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
-
-    sellerUtteranceDetected = true;
 
     updateGHL(
       "ai_wrong_number",
@@ -1206,7 +1122,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
     return;
   }
 
-  sellerUtteranceDetected = true;
   sellerEngagedPostOpener = true;
 
  fullTranscript += `\nSeller: ${transcript}`;
@@ -1217,11 +1132,6 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 
     // user starts speaking → stop any current playback (realtime mode only)
 if (event.type === "input_audio_buffer.speech_started") {
-  if (openerLock) {
-    console.log("INTERRUPT BLOCKED — opener lock active");
-    return;
-  }
-
   console.log("Possible user speech detected");
 
   const canInterrupt =
@@ -1281,13 +1191,10 @@ if (event.type === "input_audio_buffer.speech_started") {
       if (openerInProgress) {
         openerInProgress = false;
 
-        openerLock = false;
-
-        callState = CALL_STATE.LISTENING;
-
-        console.log("OPENER FULLY COMPLETED — LOCK RELEASED");
-
-        sendTurnDetectionInterruptResponse(true);
+        if (callState === CALL_STATE.OPENING) {
+          callState = CALL_STATE.LISTENING;
+          console.log("OPENER ACTUALLY FINISHED → LISTENING");
+        }
       }
 
       const text = JSON.stringify(event);
@@ -1336,16 +1243,15 @@ if (event.type === "input_audio_buffer.speech_started") {
    if (msg.event === "media") {
   latestMediaTimestamp = msg.media.timestamp;
 
- if (openAiWs.readyState === WebSocket.OPEN) {
-  // With server_vad, OpenAI commits the input buffer on speech end. Committing
-  // after every Twilio frame corrupts the buffer and commonly sounds like static.
-  openAiWs.send(
-    JSON.stringify({
-      type: "input_audio_buffer.append",
-      audio: msg.media.payload,
-    })
-  );
-}
+  if (openAiWs.readyState === WebSocket.OPEN) {
+
+    openAiWs.send(
+      JSON.stringify({
+        type: "input_audio_buffer.append",
+        audio: msg.media.payload,
+      })
+    );
+  }
 
   return;
 }
