@@ -197,12 +197,52 @@ function buildOpenerSpeechContext(lead) {
   };
 }
 
+/** Mandatory first lines (session + response.create). Server fills name/location only. */
+function buildFixedOutboundOpenerScript(ctx) {
+  const hi = `Hi ${ctx.sellerName}?`;
+  const ask = `This is Daniel. Would you potentially be open to selling your property on ${ctx.locationClause}?`;
+  return { hi, ask };
+}
+
+function buildOutboundOpenerInstructionBlock(ctx) {
+  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
+  return [
+    "OPENING SCRIPT — first audio after connect (non-negotiable)",
+    "",
+    "Deliver exactly two spoken parts in order, with natural tone but verbatim wording:",
+    `1) Say exactly: ${hi}`,
+    "2) Then stay completely silent for about one second (no filler, no throat clearing).",
+    `3) Say exactly: ${ask}`,
+    "",
+    "Do not add any words before step 1. Do not add small talk between steps 1 and 3.",
+    "Do not change the location phrase; it must match the session wording character-for-character (aside from normal capitalization in speech).",
+    "",
+    ctx.sessionRules,
+    "",
+    "After the prospect answers this opening, treat the rest of the call as a normal conversation (the fixed-script rule no longer applies).",
+  ].join("\n");
+}
+
+function buildOpenerResponseCreateInstructions(ctx) {
+  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
+  return [
+    "Speak your opening lines now (audio). This turn is ONLY those lines.",
+    "",
+    `Say exactly: ${hi}`,
+    "Then stay silent for about one second.",
+    `Then say exactly: ${ask}`,
+    "",
+    "Do not prepend anything. Do not paraphrase.",
+    'Say U.S. states as full words, never letter-by-letter.',
+  ].join("\n");
+}
+
 const SYSTEM_PROMPT = `
 You are Daniel, a real estate investor calling property owners.
 
 Speak naturally, conversationally, and confidently.
 
-Do NOT sound scripted.
+Do NOT sound scripted — except for the OPENING SCRIPT block at the top of your instructions, which you must follow verbatim on first audio; after the seller responds to that opener, sound natural and unscripted again.
 Do NOT overtalk.
 Do NOT overexplain.
 
@@ -698,6 +738,8 @@ function scheduleEndCall(reason) {
 }
 
  async function sendSessionUpdate() {
+  const openerBlock = buildOutboundOpenerInstructionBlock(openerSpeech);
+
   const leadContext = `
 CURRENT LEAD CONTEXT:
 
@@ -721,9 +763,6 @@ Do NOT read all details out loud.
 Mention the property address naturally.
 Do not sound creepy or like you're reading from a database.
 Use the data only to guide better questions.
-
-SPOKEN OPENER / ADDRESS (server-normalized for this call — follow exactly on first audio):
-${openerSpeech.sessionRules}
 `;
 
   console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
@@ -732,8 +771,13 @@ ${openerSpeech.sessionRules}
   type: "session.update",
   session: {
   type: "realtime",
+  output_modalities: ["audio"],
 
   instructions:
+    openerBlock +
+    `
+
+` +
     SYSTEM_PROMPT +
     `
 ` +
@@ -855,17 +899,7 @@ console.log(
       JSON.stringify({
         type: "response.create",
         response: {
-          instructions: [
-            "You are on a live outbound phone call. The moment you are connected, speak your opener — calm, confident, human, like a real acquisition caller (not telemarketing, not robotic, not overly enthusiastic).",
-            "",
-            `First say: "Hi ${openerSpeech.sellerName}?"`,
-            "Right after that, go completely quiet for about one second — a natural conversational pause, as if you left space for them to answer. Do not fill that pause with filler words or sounds.",
-            "",
-            `Then say: "This is Daniel. Would you potentially be open to selling your property on ${openerSpeech.locationClause}?"`,
-            "",
-            `Keep the location locked to this exact spoken phrase: "${openerSpeech.locationClause}". That phrase uses only the street name (no house numbers, no ZIP).`,
-            'Always pronounce the state as full spoken English words. Never read a state as separate letters (no "F L", "O H", or "T X").',
-          ].join("\n"),
+          instructions: buildOpenerResponseCreateInstructions(openerSpeech),
         },
       })
     );
