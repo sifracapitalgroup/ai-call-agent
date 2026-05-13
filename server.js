@@ -197,47 +197,32 @@ function buildOpenerSpeechContext(lead) {
   };
 }
 
-/** Mandatory first lines (session + response.create). Server fills name/location only. */
-function buildFixedOutboundOpenerScript(ctx) {
-  const hi = `Hi ${ctx.sellerName}?`;
-  const ask = `This is Daniel. Would you potentially be open to selling your property on ${ctx.locationClause}?`;
-  return { hi, ask };
+/** Clean fixed opener */
+function buildSetOpener(ctx) {
+  return `
+Hey ${ctx.sellerName}?
+
+This is Daniel.
+
+Would you potentially be open to selling your property on ${ctx.locationClause}?
+`;
 }
 
 function buildOutboundOpenerInstructionBlock(ctx) {
-  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
-  return [
-    "OPENING SCRIPT — first audio after connect (non-negotiable)",
-    "",
-    "Deliver exactly two spoken parts in order, with natural tone but verbatim wording:",
-    `1) Say exactly: ${hi}`,
-    "2) Then stay completely silent for about one second (no filler, no throat clearing).",
-    `3) Say exactly: ${ask}`,
-    "",
-    "Do not add any words before step 1. Do not add small talk between steps 1 and 3.",
-    "Do not change the location phrase; it must match the session wording character-for-character (aside from normal capitalization in speech).",
-    "",
-    ctx.sessionRules,
-    "",
-    "After the prospect answers this opening, treat the rest of the call as a normal conversation (the fixed-script rule no longer applies).",
-    "Do not react with loud or empty praise, validation, or support-agent warmth (for example: \"Great!\", \"Perfect!\", \"Awesome!\", \"totally understand\", \"that makes sense\", \"I appreciate that\") before your next line—either skip straight to a calm follow-up question or use at most one low-key beat (for example \"okay\" or \"got it\").",
-  ].join("\n");
+  return `
+OPENING SCRIPT:
+
+${buildSetOpener(ctx)}
+
+Do not add extra words before or after the opener.
+
+After the seller responds, continue naturally.
+`;
 }
 
 function buildOpenerResponseCreateInstructions(ctx) {
-  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
-  return [
-    "Speak your opening lines now (audio). This turn is ONLY those lines.",
-    "",
-    `Say exactly: ${hi}`,
-    "Then stay silent for about one second.",
-    `Then say exactly: ${ask}`,
-    "",
-    "Do not prepend anything. Do not paraphrase.",
-    'Say U.S. states as full words, never letter-by-letter.',
-  ].join("\n");
+  return buildSetOpener(ctx);
 }
-
 const SYSTEM_PROMPT = `
 You are Daniel, a real estate investor calling property owners about potential off-market acquisitions.
 
