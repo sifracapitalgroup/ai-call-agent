@@ -586,6 +586,11 @@ wss.on("connection", (twilioWs) => {
   /** True until first `session.updated` after our initial `session.update` (avoid opener before config applies). */
   let openerSessionUpdatePendingAck = false;
 
+  /** While true, never cancel assistant audio or treat side-channel transcripts as voicemail/wrong-number. */
+  function isOpenerPlaybackProtected() {
+    return callState === CALL_STATE.OPENING || openerInProgress;
+  }
+
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime",
   {
@@ -857,6 +862,11 @@ console.log(
   }
 
   function clearTwilioAudio() {
+    if (isOpenerPlaybackProtected()) {
+      console.log("clearTwilioAudio skipped — opener must play to completion");
+      return;
+    }
+
     pendingTwilioMediaPayloads.length = 0;
 
     if (!streamSid) return;
@@ -1022,6 +1032,14 @@ openAiWs.on("message", (data) => {
   forwardAssistantAudioToTwilio(event.delta);
 }
 
+    if (event.type === "conversation.interrupted") {
+      if (isOpenerPlaybackProtected()) {
+        console.warn(
+          "OPENAI conversation.interrupted during opener — opener should not be cut server-side; check Realtime session settings"
+        );
+      }
+    }
+
     if (event.type === "conversation.item.created") {
       const item = event.item;
 
@@ -1037,8 +1055,6 @@ openAiWs.on("message", (data) => {
 
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
-
-  sellerUtteranceDetected = true;
 
   const transcript = (event.transcript || "").trim();
   const lowerTranscript = transcript.toLowerCase();
@@ -1069,6 +1085,13 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   );
 
   if (isVoicemail) {
+    if (isOpenerPlaybackProtected()) {
+      console.log(
+        "VOICEMAIL phrase matched during opener — ignoring (must finish opener first)"
+      );
+      fullCallTranscript += `VOICEMAIL (ignored during opener): ${transcript}\n`;
+      return;
+    }
 
   console.log("VOICEMAIL DETECTED");
 
@@ -1077,6 +1100,8 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   fullTranscript += `\nVOICEMAIL: ${transcript}`;
   fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
+
+  sellerUtteranceDetected = true;
 
   // STOP OPENAI RESPONSE
   openAiWs.send(JSON.stringify({
@@ -1125,6 +1150,14 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   );
 
   if (isWrongNumber) {
+    if (isOpenerPlaybackProtected()) {
+      console.log(
+        "WRONG NUMBER phrase matched during opener — ignoring (must finish opener first)"
+      );
+      fullCallTranscript += `WRONG NUMBER (ignored during opener): ${transcript}\n`;
+      return;
+    }
+
     console.log("WRONG NUMBER DETECTED");
 
     callState = CALL_STATE.WRONG_NUMBER;
@@ -1132,6 +1165,8 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
+
+    sellerUtteranceDetected = true;
 
     updateGHL(
       "ai_wrong_number",
@@ -1161,6 +1196,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
     return;
   }
 
+  sellerUtteranceDetected = true;
   sellerEngagedPostOpener = true;
 
  fullTranscript += `\nSeller: ${transcript}`;
@@ -1175,6 +1211,7 @@ if (event.type === "input_audio_buffer.speech_started") {
 
   const canInterrupt =
     !openerInProgress &&
+    callState !== CALL_STATE.OPENING &&
     (callState === CALL_STATE.LISTENING ||
       callState === CALL_STATE.RESPONDING);
 
