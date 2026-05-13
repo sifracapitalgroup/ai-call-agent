@@ -1009,27 +1009,34 @@ openAiWs.on("message", (data) => {
       }
     }
 
-    if (event.type === "response.output_audio.delta") {
+    const outputAudioDelta =
+      event.type === "response.output_audio.delta" ||
+      event.type === "response.audio.delta";
+    if (outputAudioDelta) {
+      const audioChunk = event.delta;
+      if (!audioChunk) {
+        console.warn("OPENAI audio delta event missing delta payload:", event.type);
+      } else {
+        console.log("AUDIO DELTA RECEIVED");
+      }
 
-  console.log("AUDIO DELTA RECEIVED");
+      if (event.item_id) {
+        lastAssistantItem = event.item_id;
+      }
 
-  if (event.item_id) {
-    lastAssistantItem = event.item_id;
-  }
+      if (
+        callState === CALL_STATE.LISTENING ||
+        callState === CALL_STATE.INTERRUPTING
+      ) {
+        callState = CALL_STATE.RESPONDING;
+      }
 
-  if (
-    callState === CALL_STATE.LISTENING ||
-    callState === CALL_STATE.INTERRUPTING
-  ) {
-    callState = CALL_STATE.RESPONDING;
-  }
+      if (!responseStartTimestamp) {
+        responseStartTimestamp = latestMediaTimestamp;
+      }
 
-  if (!responseStartTimestamp) {
-    responseStartTimestamp = latestMediaTimestamp;
-  }
-
-  forwardAssistantAudioToTwilio(event.delta);
-}
+      forwardAssistantAudioToTwilio(audioChunk);
+    }
 
     if (event.type === "conversation.interrupted") {
       if (isOpenerPlaybackProtected()) {
@@ -1330,17 +1337,12 @@ if (event.type === "input_audio_buffer.speech_started") {
   latestMediaTimestamp = msg.media.timestamp;
 
  if (openAiWs.readyState === WebSocket.OPEN) {
-
+  // With server_vad, OpenAI commits the input buffer on speech end. Committing
+  // after every Twilio frame corrupts the buffer and commonly sounds like static.
   openAiWs.send(
     JSON.stringify({
       type: "input_audio_buffer.append",
       audio: msg.media.payload,
-    })
-  );
-
-  openAiWs.send(
-    JSON.stringify({
-      type: "input_audio_buffer.commit"
     })
   );
 }
