@@ -220,6 +220,7 @@ function buildOutboundOpenerInstructionBlock(ctx) {
     ctx.sessionRules,
     "",
     "After the prospect answers this opening, treat the rest of the call as a normal conversation (the fixed-script rule no longer applies).",
+    "Do not react with loud or empty praise (for example: \"Great!\", \"Perfect!\", \"Awesome!\", \"I appreciate that\") before your next line—either skip straight to a calm follow-up question or use at most one low-key beat (for example \"okay\" or \"got it\").",
   ].join("\n");
 }
 
@@ -249,6 +250,10 @@ Do NOT overexplain.
 Use short responses.
 Ask one question at a time.
 Let the seller speak.
+
+Reactions and acknowledgments:
+- Do not reflexively gush or thank them ("great", "perfect", "awesome", "love it", "appreciate that", "thank you so much") especially right after a simple answer to your opener—it sounds salesy and wastes time.
+- If you acknowledge, keep it minimal and calm (at most a brief "okay", "got it", or "makes sense") or say nothing and go straight to your next question. Never stack two praise lines before asking.
 
 Your goals during the conversation are to:
 
