@@ -866,6 +866,7 @@ wss.on("connection", (twilioWs) => {
   let hangupTaskScheduled = false;
   /** True from `response.create` for the opener until `response.done` for that response. */
   let openerInProgress = false;
+  let sellerAudioEnabled = false;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
@@ -1199,10 +1200,6 @@ console.log(
   }
 
  function interruptAssistant() {
-  if (openerInProgress || callState === CALL_STATE.OPENING) {
-    console.log("IGNORING INTERRUPTION DURING OPENER");
-    return;
-  }
 
   if (!lastAssistantItem || responseStartTimestamp === null) return;
 
@@ -1229,6 +1226,16 @@ openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
   callState = CALL_STATE.OPENING;
+
+  sellerAudioEnabled = false;
+
+  setTimeout(() => {
+
+    sellerAudioEnabled = true;
+
+    console.log("SELLER AUDIO ENABLED");
+
+  }, 7000);
   
   await sendSessionUpdate();
 
@@ -1529,7 +1536,13 @@ if (event.type === "input_audio_buffer.speech_started") {
       }
 
    if (msg.event === "media") {
+
   latestMediaTimestamp = msg.media.timestamp;
+
+  // Ignore seller audio during opener
+  if (!sellerAudioEnabled) {
+    return;
+  }
 
   if (openAiWs.readyState === WebSocket.OPEN) {
 
