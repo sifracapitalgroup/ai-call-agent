@@ -22,6 +22,20 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 let currentCallLead = {};
 let callNotesBySid = {};
+/** Twilio recording webhooks often omit `To`/`Called`; map parent CallSid → dialed E.164. */
+const callSidToLeadPhone = new Map();
+
+function buildGhlContactsUpsertUrl(identifier) {
+  const trimmed = String(identifier || "").trim();
+  if (!trimmed) return null;
+  const u = new URL("https://services.leadconnectorhq.com/contacts/upsert");
+  if (trimmed.includes("@")) {
+    u.searchParams.set("email", trimmed);
+  } else {
+    u.searchParams.set("number", trimmed);
+  }
+  return u.toString();
+}
 
 if (!OPENAI_API_KEY) {
   throw new Error("Missing OPENAI_API_KEY in .env");
@@ -274,7 +288,13 @@ app.all("/voice", (req, res) => {
 
 async function updateGHL(outcome, summary, phoneOverride) {
   try {
-    const response = await fetch("https://services.leadconnectorhq.com/contacts/upsert", {
+    const upsertUrl = buildGhlContactsUpsertUrl(phoneOverride);
+    if (!upsertUrl) {
+      console.warn("GHL UPDATE SKIPPED: missing phone/email identifier for upsert");
+      return;
+    }
+
+    const response = await fetch(upsertUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.GHL_API_KEY}`,
@@ -337,56 +357,65 @@ if (
 });
 
 app.post("/recording", async (req, res) => {
+  const callSid = req.body.CallSid;
+
   try {
     const recordingUrl = req.body.RecordingUrl + ".mp3";
-    const callSid = req.body.CallSid;
 
-    // THIS IS THE IMPORTANT PART
     const phone =
+      (callSid && callSidToLeadPhone.get(callSid)) ||
       req.body.To ||
       req.body.Called ||
+      req.body.Caller ||
+      req.body.From ||
       currentCallLead.phone;
 
     console.log("Recording ready:", recordingUrl);
     console.log("Call SID:", callSid);
     console.log("PHONE:", phone);
 
-    const response = await fetch(
-      "https://services.leadconnectorhq.com/contacts/upsert",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-          Version: "2021-07-28",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          locationId: process.env.GHL_LOCATION_ID,
-          phone: phone,
+    const upsertUrl = buildGhlContactsUpsertUrl(phone);
+    if (!upsertUrl) {
+      console.warn(
+        "GHL RECORDING UPDATE SKIPPED: no phone/email (recording callbacks often omit To/Called; ensure CallSid was registered at dial)"
+      );
+      return res.sendStatus(200);
+    }
 
-          customFields: [
-            {
-              key: "twilio_call_sid",
-              field_value: callSid,
-            },
-            {
-              key: "twilio_recording_url",
-              field_value: recordingUrl,
-            },
-          ],
-        }),
-      }
-    );
+    const response = await fetch(upsertUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+        Version: "2021-07-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        locationId: process.env.GHL_LOCATION_ID,
+        phone: phone,
+
+        customFields: [
+          {
+            key: "twilio_call_sid",
+            field_value: callSid,
+          },
+          {
+            key: "twilio_recording_url",
+            field_value: recordingUrl,
+          },
+        ],
+      }),
+    });
 
     const data = await response.json();
 
     console.log("GHL RECORDING UPDATE:", JSON.stringify(data, null, 2));
 
     res.sendStatus(200);
-
   } catch (err) {
     console.error("RECORDING ERROR:", err);
     res.sendStatus(500);
+  } finally {
+    if (callSid) callSidToLeadPhone.delete(callSid);
   }
 });
 
@@ -465,6 +494,8 @@ app.post("/start-call", async (req, res) => {
   recordingStatusCallback: `${publicBaseUrl}/recording`,
   recordingStatusCallbackEvent: ["completed"],
 });
+
+    callSidToLeadPhone.set(call.sid, cleanPhone);
 
     console.log("OUTBOUND CALL STARTED:", call.sid);
 
@@ -824,8 +855,6 @@ console.log(
       JSON.stringify({
         type: "response.create",
         response: {
-          modalities: ["audio"],
-
           instructions: [
             "You are on a live outbound phone call. The moment you are connected, speak your opener — calm, confident, human, like a real acquisition caller (not telemarketing, not robotic, not overly enthusiastic).",
             "",
