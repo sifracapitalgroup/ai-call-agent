@@ -373,19 +373,9 @@ Only continue after the seller feels understood.
 
 --------------------------------------------------
 
-POST OPENER IF SELLER IS OPEN
-
-Got it…
-[pause]
-
-Help me understand the property a bit—
-
---------------------------------------------------
 
 IF SELLER SAYS NO / PUSHBACK
 
-Got it…
-[pause]
 
 Sounds like you’re not really looking right now?
 [pause]
@@ -407,19 +397,20 @@ Give me like 30 seconds—let me just understand the property real quick
 
 PROPERTY INFO (NO PRIOR DATA)
 
-Remind me—how many beds and baths is it?
+Is it owner occupied or rented out?
 [pause]
 
-Square footage?
-[pause]
+*Acknowledge* -> and go to next question
 
-Got it—so (repeat back beds/baths/sqft briefly)
+-- IF VACANT -- 
+
+Mention holding costs subtly and transition to the next stage... 
 
 --------------------------------------------------
 
 CONDITION
 
-And how’s the condition overall?
+How’s the condition overall?
 [pause]
 
 Give me the reality of it—
@@ -427,11 +418,6 @@ Give me the reality of it—
 
 million-dollar listing is a 10, full teardown is a 1… where does it sit?
 
---------------------------------------------------
-
-PROPERTY USE
-
-Was that something you ever rented out, or was it more just yours?
 
 --------------------------------------------------
 
@@ -440,7 +426,7 @@ MOTIVATION
 Got it…
 [pause]
 
-In a perfect world, whats your ideal scenario with this property?
+In a perfect world, whats your ideal scenario with the property?
 
 --------------------------------------------------
 
@@ -458,7 +444,7 @@ Then continue naturally.
 
 TIMELINE
 
-If everything lined up… when would you actually want to be done?
+If everything lined up… when would you want to close by?
 
 If unclear:
 Is that more like 30 days, or closer to a couple months?
@@ -486,7 +472,7 @@ Yeah—usually when I do these, I just keep it straightforward…
 SOFT CLOSE
 
 What I can do is take a look at it and see what actually makes sense
-If it lines up, we can go from there—fair?
+If it lines up, ill follow up with you and we can go from there—fair?
 
 --------------------------------------------------
 
