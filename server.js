@@ -578,6 +578,8 @@ wss.on("connection", (twilioWs) => {
   let hangupTaskScheduled = false;
   /** True from `response.create` for the opener until `response.done` for that response. */
   let openerInProgress = false;
+  /** Hard mutex: no inbound audio, VAD, transcription, clears, or interrupts until opener `response.done`. */
+  let openerLock = true;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
@@ -862,8 +864,8 @@ console.log(
   }
 
   function clearTwilioAudio() {
-    if (isOpenerPlaybackProtected()) {
-      console.log("clearTwilioAudio skipped — opener must play to completion");
+    if (openerLock) {
+      console.log("CLEAR BLOCKED — opener lock active");
       return;
     }
 
@@ -954,8 +956,8 @@ console.log(
   }
 
  function interruptAssistant() {
-  if (openerInProgress || callState === CALL_STATE.OPENING) {
-    console.log("IGNORING INTERRUPTION DURING OPENER");
+  if (openerLock) {
+    console.log("INTERRUPT BLOCKED — opener lock active");
     return;
   }
 
@@ -1055,6 +1057,10 @@ openAiWs.on("message", (data) => {
 
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
+  if (openerLock) {
+    console.log("TRANSCRIPTION IGNORED DURING OPENER LOCK");
+    return;
+  }
 
   const transcript = (event.transcript || "").trim();
   const lowerTranscript = transcript.toLowerCase();
@@ -1207,13 +1213,16 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 
     // user starts speaking → stop any current playback (realtime mode only)
 if (event.type === "input_audio_buffer.speech_started") {
+  if (openerLock) {
+    console.log("INTERRUPT BLOCKED — opener lock active");
+    return;
+  }
+
   console.log("Possible user speech detected");
 
   const canInterrupt =
-    !openerInProgress &&
-    callState !== CALL_STATE.OPENING &&
-    (callState === CALL_STATE.LISTENING ||
-      callState === CALL_STATE.RESPONDING);
+    callState === CALL_STATE.LISTENING ||
+    callState === CALL_STATE.RESPONDING;
 
   if (!canInterrupt) {
     console.log("Ignoring speech_started during opener/startup");
@@ -1265,19 +1274,15 @@ if (event.type === "input_audio_buffer.speech_started") {
 
     // safety: end-call checks
     if (event.type === "response.done") {
-      const openerJustFinished =
-        openerInProgress && callState === CALL_STATE.OPENING;
-
       if (openerInProgress) {
         openerInProgress = false;
 
-        if (callState === CALL_STATE.OPENING) {
-          callState = CALL_STATE.LISTENING;
-          console.log("OPENER ACTUALLY FINISHED → LISTENING");
-        }
-      }
+        openerLock = false;
 
-      if (openerJustFinished) {
+        callState = CALL_STATE.LISTENING;
+
+        console.log("OPENER FULLY COMPLETED — LOCK RELEASED");
+
         sendTurnDetectionInterruptResponse(true);
       }
 
@@ -1329,7 +1334,7 @@ if (event.type === "input_audio_buffer.speech_started") {
 
   if (
     openAiWs.readyState === WebSocket.OPEN &&
-    callState !== CALL_STATE.OPENING
+    !openerLock
   ) {
     openAiWs.send(
       JSON.stringify({
