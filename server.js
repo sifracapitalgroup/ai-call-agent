@@ -1193,27 +1193,21 @@ if (event.type === "input_audio_buffer.speech_started") {
         return;
       }
 
-      if (msg.event === "media") {
-        latestMediaTimestamp = msg.media.timestamp;
+   if (msg.event === "media") {
+  latestMediaTimestamp = msg.media.timestamp;
 
-       
-if (openAiWs.readyState === WebSocket.OPEN) {
+  if (openAiWs.readyState === WebSocket.OPEN) {
 
-  openAiWs.send(
-    JSON.stringify({
-      type: "input_audio_buffer.append",
-      audio: msg.media.payload,
-    })
-  );
+    openAiWs.send(
+      JSON.stringify({
+        type: "input_audio_buffer.append",
+        audio: msg.media.payload,
+      })
+    );
+  }
 
-  openAiWs.send(
-    JSON.stringify({
-      type: "input_audio_buffer.commit"
-    })
-  );
+  return;
 }
-        return;
-      }
 
      if (msg.event === "stop") {
   console.log("Twilio stream stopped:", {
