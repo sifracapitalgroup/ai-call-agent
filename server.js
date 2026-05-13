@@ -801,7 +801,8 @@ Use the data only to guide better questions.
         silence_duration_ms: 1050,
         /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
         create_response: false,
-        interrupt_response: true,
+        /** Server-side barge-in cuts assistant audio; keep false until opener finishes. */
+        interrupt_response: false,
       }
     },
 
@@ -824,6 +825,34 @@ console.log(
    
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
+
+  function sendTurnDetectionInterruptResponse(enabled) {
+    if (openAiWs.readyState !== WebSocket.OPEN) return;
+    openAiWs.send(
+      JSON.stringify({
+        type: "session.update",
+        session: {
+          type: "realtime",
+          audio: {
+            input: {
+              format: {
+                type: "audio/pcmu",
+              },
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.97,
+                prefix_padding_ms: 700,
+                silence_duration_ms: 1050,
+                create_response: false,
+                interrupt_response: enabled,
+              },
+            },
+          },
+        },
+      })
+    );
+    console.log("TURN_DETECTION interrupt_response:", enabled);
+  }
 
   function clearTwilioAudio() {
     pendingTwilioMediaPayloads.length = 0;
@@ -1135,8 +1164,9 @@ if (event.type === "input_audio_buffer.speech_started") {
   console.log("Possible user speech detected");
 
   const canInterrupt =
-    callState === CALL_STATE.LISTENING ||
-    callState === CALL_STATE.RESPONDING;
+    !openerInProgress &&
+    (callState === CALL_STATE.LISTENING ||
+      callState === CALL_STATE.RESPONDING);
 
   if (!canInterrupt) {
     console.log("Ignoring speech_started during opener/startup");
@@ -1188,6 +1218,9 @@ if (event.type === "input_audio_buffer.speech_started") {
 
     // safety: end-call checks
     if (event.type === "response.done") {
+      const openerJustFinished =
+        openerInProgress && callState === CALL_STATE.OPENING;
+
       if (openerInProgress) {
         openerInProgress = false;
 
@@ -1195,6 +1228,10 @@ if (event.type === "input_audio_buffer.speech_started") {
           callState = CALL_STATE.LISTENING;
           console.log("OPENER ACTUALLY FINISHED → LISTENING");
         }
+      }
+
+      if (openerJustFinished) {
+        sendTurnDetectionInterruptResponse(true);
       }
 
       const text = JSON.stringify(event);
