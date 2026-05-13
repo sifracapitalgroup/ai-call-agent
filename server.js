@@ -720,7 +720,10 @@ ${openerSpeech.sessionRules}
         type: "server_vad",
         threshold: 0.97,
         prefix_padding_ms: 700,
-        silence_duration_ms: 1050
+        silence_duration_ms: 1050,
+        /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
+        create_response: false,
+        interrupt_response: true,
       }
     },
 
@@ -873,10 +876,14 @@ openAiWs.on("open", async () => {
   
   await sendSessionUpdate();
 
+  setTimeout(() => {
+    sendOpenerResponseOnce("post_session_update_tick");
+  }, 200);
+
   openerFallbackTimer = setTimeout(() => {
     openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_after_session_update");
-  }, 900);
+    sendOpenerResponseOnce("fallback_opener");
+  }, 1600);
 
 hangupAfterOpenerTimer = setTimeout(() => {
   if (callState === CALL_STATE.OPENING) {
@@ -892,10 +899,6 @@ openAiWs.on("message", (data) => {
   try {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
-
-    if (event.type === "session.updated") {
-      sendOpenerResponseOnce("session.updated");
-    }
 
     if (event.type === "response.output_audio.delta") {
 
@@ -1089,6 +1092,39 @@ if (event.type === "input_audio_buffer.speech_started") {
   }, 450);
   }
 }
+
+    if (event.type === "input_audio_buffer.speech_stopped") {
+      if (
+        callState === CALL_STATE.VOICEMAIL ||
+        callState === CALL_STATE.WRONG_NUMBER ||
+        callState === CALL_STATE.ENDING ||
+        callState === CALL_STATE.ENDED
+      ) {
+        return;
+      }
+
+      if (callState === CALL_STATE.OPENING) {
+        return;
+      }
+
+      if (
+        callState === CALL_STATE.RESPONDING ||
+        callState === CALL_STATE.INTERRUPTING
+      ) {
+        return;
+      }
+
+      if (openAiWs.readyState !== WebSocket.OPEN) return;
+
+      console.log("SPEECH STOPPED → response.create (manual reply turn)");
+
+      openAiWs.send(
+        JSON.stringify({
+          type: "response.create",
+        })
+      );
+    }
+
 
     // safety: end-call checks
     if (event.type === "response.done") {
