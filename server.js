@@ -1524,7 +1524,7 @@ setTimeout(() => {
 
   console.log("SELLER AUDIO ENABLED");
 
-}, 11000);
+}, 8500);
 
         console.log("Twilio stream started:", {
           streamSid,
