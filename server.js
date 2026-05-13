@@ -225,18 +225,44 @@ function buildOutboundOpenerInstructionBlock(ctx) {
 }
 
 function buildOpenerResponseCreateInstructions(ctx) {
-  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
-  return [
-    "Speak your opening lines now (audio). This turn is ONLY those lines.",
-    "",
-    `Say exactly: ${hi}`,
-    "Then stay silent for about one second.",
-    `Then say exactly: ${ask}`,
-    "",
-    "Do not prepend anything. Do not paraphrase.",
-    'Say U.S. states as full words, never letter-by-letter.',
-  ].join("\n");
+const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
+
+return [
+"IMPORTANT — STRICT DELIVERY MODE",
+"",
+"For the FIRST spoken response ONLY:",
+"",
+"You MUST say the OPENING SCRIPT exactly as written.",
+"",
+"Do NOT:",
+"- paraphrase",
+"- summarize",
+"- shorten",
+"- improvise",
+"- add words",
+"- remove words",
+"- change wording",
+'- sound "more natural"',
+"- rewrite phrases",
+"",
+"Treat the opener like a strict verbal readout.",
+"",
+"OPENING SCRIPT:",
+"",
+`1) Say exactly: ${hi}`,
+"",
+"2) Then stay completely silent for about one second.",
+"",
+`3) Then say exactly: ${ask}`,
+"",
+"Do not begin conversational behavior until AFTER the seller responds.",
+"",
+"Once the seller responds:",
+"STRICT DELIVERY MODE ENDS.",
+"Return to normal conversational behavior.",
+].join("\n");
 }
+
 
 const SYSTEM_PROMPT = `
 You are Daniel, a real estate investor calling property owners about potential off-market acquisitions.
