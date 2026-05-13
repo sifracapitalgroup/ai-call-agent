@@ -225,7 +225,6 @@ function buildOutboundOpenerInstructionBlock(ctx) {
     ctx.sessionRules,
     "",
     "After the prospect answers this opening, treat the rest of the call as a normal conversation (the fixed-script rule no longer applies).",
-    "Do not react with loud or empty praise (for example: \"Great!\", \"Perfect!\", \"Awesome!\", \"I appreciate that\") before your next line—either skip straight to a calm follow-up question or use at most one low-key beat (for example \"okay\" or \"got it\").",
   ].join("\n");
 }
 
