@@ -729,6 +729,9 @@ app.post("/recording", async (req, res) => {
 
 app.post("/start-call", async (req, res) => {
   try {
+
+    console.log( "RAW GHL BODY:", JSON.stringify(req.body, null, 2) );
+    
     const {
       first_name,
       last_name,
