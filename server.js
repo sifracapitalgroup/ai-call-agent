@@ -733,49 +733,70 @@ app.post("/start-call", async (req, res) => {
       first_name,
       last_name,
       phone,
+      full_name,
+      name,
+      contact_id,
+      contactId,
+      id,
       property_address,
       streetAddress,
       address,
       city,
       state,
       postal_code,
+      zip,
       bed,
       bath,
       sq_ft,
+      sqft,
       estimated_value,
+      estimatedValue,
       year_built,
+      yearBuilt,
       sale_price,
       last_sold,
+      lastSold,
       call_notes,
+      callNotes,
     } = req.body;
 
     const cleanPhone = String(phone || "").trim();
+    const ghlContactId = String(
+      contact_id || contactId || id || req.body.contact?.id || ""
+    ).trim();
+
+    const fullNameRaw = String(full_name || name || "").trim();
+    const nameParts = fullNameRaw.split(/\s+/).filter(Boolean);
+    const resolvedFirst =
+      String(first_name || "").trim() ||
+      nameParts[0] ||
+      "there";
+    const resolvedLast =
+      String(last_name || "").trim() ||
+      (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
 
     currentCallLead = {
-      first_name:
-  first_name ||
-  full_name?.split(" ")[0] ||
-  name?.split(" ")[0] ||
-  "there",
-      last_name: last_name || "",
+      ghl_contact_id: ghlContactId,
+      first_name: resolvedFirst,
+      last_name: resolvedLast,
       phone: cleanPhone,
       address:
-  property_address ||
-  req.body["Property Address"] ||
-  address ||
-  streetAddress ||
-  "your property",
-      city: city || "",
-      state: state || "",
-      postal_code: postal_code || "",
-      bed: bed || "",
-      bath: bath || "",
-      sq_ft: sq_ft || "",
-      estimated_value: estimated_value || "",
-      year_built: year_built || "",
-      sale_price: sale_price || "",
-      last_sold: last_sold || "",
-      call_notes: call_notes || "",
+        property_address ||
+        req.body["Property Address"] ||
+        address ||
+        streetAddress ||
+        "your property",
+      city: String(city || "").trim(),
+      state: String(state || "").trim(),
+      postal_code: String(postal_code || zip || "").trim(),
+      bed: String(bed || "").trim(),
+      bath: String(bath || "").trim(),
+      sq_ft: String(sq_ft || sqft || "").trim(),
+      estimated_value: String(estimated_value || estimatedValue || "").trim(),
+      year_built: String(year_built || yearBuilt || "").trim(),
+      sale_price: String(sale_price || "").trim(),
+      last_sold: String(last_sold || lastSold || "").trim(),
+      call_notes: String(call_notes || callNotes || "").trim(),
     };
 
     console.log("GHL WEBHOOK HIT:", currentCallLead);
@@ -806,6 +827,14 @@ app.post("/start-call", async (req, res) => {
     callSidToLeadPhone.set(call.sid, cleanPhone);
 
     console.log("OUTBOUND CALL STARTED:", call.sid);
+    console.log(
+      "CALL_CORRELATION:",
+      JSON.stringify({
+        callSid: call.sid,
+        phone: cleanPhone,
+        ghl_contact_id: currentCallLead.ghl_contact_id || undefined,
+      })
+    );
 
     res.status(200).json({
       success: true,
@@ -1016,15 +1045,15 @@ Name: ${currentCallLead.first_name || ""} ${currentCallLead.last_name || ""}
 Property Address: ${currentCallLead.address || ""}
 City: ${currentCallLead.city || ""}
 State: ${currentCallLead.state || ""}
-Zip Code: ${currentCallLead.zip || ""}
-Estimated Value: ${currentCallLead.estimatedValue || ""}
-Sq Ft: ${currentCallLead.sqft || ""}
+Zip Code: ${currentCallLead.postal_code || ""}
+Estimated Value: ${currentCallLead.estimated_value || ""}
+Sq Ft: ${currentCallLead.sq_ft || ""}
 Bed: ${currentCallLead.bed || ""}
 Bath: ${currentCallLead.bath || ""}
-Year Built: ${currentCallLead.yearBuilt || ""}
+Year Built: ${currentCallLead.year_built || ""}
 Sale Price: ${currentCallLead.sale_price || ""}
-Last Sold: ${currentCallLead.lastSold || ""}
-Call Notes: ${currentCallLead.callNotes || ""}
+Last Sold: ${currentCallLead.last_sold || ""}
+Call Notes: ${currentCallLead.call_notes || ""}
 
 Use this as background context.
 Do NOT read all details out loud.
