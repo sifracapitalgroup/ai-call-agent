@@ -650,8 +650,7 @@ function normalizeAddressForSpeech(address) {
   let callSid = null;
   let latestMediaTimestamp = 0;
   let responseStartTimestamp = null;
-  let lastAssistantItem = null;
-  let assistantTranscript = "";
+  let lastAssistantItem = null;;
   let fullCallTranscript = "";
   let callEndingScheduled = false;
   let leadFirst_name = currentCallLead.first_name || "there";
@@ -852,34 +851,45 @@ Use the data only to guide better questions.
  const sessionUpdate = {
   type: "session.update",
   session: {
-    type: "realtime",
-     output_modalities: ["text"],
-      turn_detection: {
-      type: "server_vad",
-      threshold: 0.97,
-      prefix_padding_ms: 700,
-      silence_duration_ms: 1050,
-    
-      },
-    
-      input_audio_format: "g711_ulaw",
-      input_audio_transcription: {
-      model: "gpt-4o-mini-transcribe",
-    },
+  type: "realtime",
 
-      instructions: SYSTEM_PROMPT + `
+  instructions:
+    SYSTEM_PROMPT +
+    `
 
 CRITICAL EXECUTION RULE:
 
-- LESS is MORE, direct sentences
-- Follow the call flow tightly
+- LESS is MORE
+- Direct sentences
 - One question at a time
-If a sentence can be shorter, make it shorter. 
 
-` + leadContext,
-      temperature: 0.60,
+` +
+    leadContext,
+
+  audio: {
+    input: {
+      format: {
+        type: "audio/pcmu"
+      },
+
+      turn_detection: {
+        type: "server_vad",
+        threshold: 0.97,
+        prefix_padding_ms: 700,
+        silence_duration_ms: 1050
+      }
     },
-  };
+
+    output: {
+      format: {
+        type: "audio/pcmu"
+      },
+
+      voice: "alloy"
+    }
+  }
+  }
+};
    
 console.log(
   "SESSION UPDATE SENT:",
@@ -935,11 +945,13 @@ openAiWs.on("open", async () => {
   
   await sendSessionUpdate();
 
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions: `
+openAiWs.send(
+  JSON.stringify({
+    type: "response.create",
+    response: {
+      modalities: ["audio"],
+
+      instructions: `
 Say exactly this. No extra words. No filler. No hesitation.
 
 Do NOT say "uh", "um", or any filler.
@@ -954,95 +966,23 @@ Hey ${leadFirst_name}?
 
 This is Daniel.
 
-I'm calling in regards to ${leadAddress} - Would you potentially be open to selling?
+I'm calling about ${leadAddress}.
 
+Would you potentially be open to selling?
 `
-      },
-    })
-  );
-});
+    },
+  })
+);
 
-async function speakWithElevenLabs(text) {
-  try {
-    console.log("ELEVEN START:", text);
+setTimeout(() => {
+  openingMessageActive = false;
+  console.log("OPENER COMPLETE");
+}, 4000);
+  });
 
-    if (!text) {
-      console.log("ELEVEN STOP: no text");
-      return;
-    }
-
-    if (!streamSid) {
-      console.log("ELEVEN STOP: no streamSid");
-      return;
-    }
-
-    const voiceId = process.env.ELEVENLABS_VOICE_ID;
-
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=ulaw_8000`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text,
-          model_id: "eleven_flash_v2_5",
-          voice_settings: {
-            stability: 0.35,
-            similarity_boost: 0.85,
-            style: 0.35,
-            use_speaker_boost: true,
-          },
-        }),
-      }
-    );
-
-    console.log("ELEVEN STATUS:", response.status);
-
-    if (!response.ok) {
-      console.error("ELEVEN ERROR:", await response.text());
-      return;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    console.log("ELEVEN AUDIO BYTES:", arrayBuffer.byteLength);
-
-    const base64Audio = Buffer.from(arrayBuffer).toString("base64");
-
-    twilioWs.send(
-      JSON.stringify({
-        event: "media",
-        streamSid,
-        media: {
-          payload: base64Audio,
-        },
-      })
-    );
-
-    console.log("ELEVEN SENT TO TWILIO");
-
-     if (!openerFinished && openingMessageActive) {
-      openerFinished = true;
-
-      // slight safety buffer after playback
-      setTimeout(() => {
-        openingMessageActive = false;
-        console.log("OPENER INTERRUPTION ENABLED");
-      }, 1200);
-    }
-    
-  } catch (err) {
-    console.error("ELEVEN FUNCTION ERROR:", err);
-  }
-}
-// ✅ THEN this
-let assistantText = "";
 let fullTranscript = ""; 
 let sellerSpoke = false;
 let openingMessageActive = false;
-let openerFinished = false;
 let wrongNumberDetected = false;
 
 // ✅ THEN your OpenAI handler
@@ -1053,6 +993,26 @@ openAiWs.on("message", (data) => {
     console.log("RAW OPENAI:", data.toString());
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
+    if (event.type === "response.output_audio.delta") {
+
+  console.log("AUDIO DELTA RECEIVED");
+
+  if (!responseStartTimestamp) {
+    responseStartTimestamp = latestMediaTimestamp;
+  }
+
+  if (streamSid) {
+    twilioWs.send(
+      JSON.stringify({
+        event: "media",
+        streamSid,
+        media: {
+          payload: event.delta
+        }
+      })
+    );
+  }
+}
 
     if (event.type === "conversation.item.created") {
       const item = event.item;
@@ -1181,33 +1141,8 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
  fullTranscript += `\nSeller: ${transcript}`;
 fullCallTranscript += `SELLER: ${transcript}\n`;
 
-}
+  }
 
-
-    // collect AI streaming text
-    if (event.type === "response.text.delta" && event.delta) {
-      assistantText += event.delta;
-    }
-
-// full message finished
-if (event.type === "response.text.done") {
-  console.log("AI SAID:", assistantText);
-
-
-  fullTranscript += `\nAI: ${assistantText}`;
-  fullCallTranscript += `AI: ${assistantText}\n`;
-
-  speakWithElevenLabs(assistantText);
-
-console.log("CHECKING END CALL:", assistantText);
-
-if (shouldEndCall(assistantText)) {
-  console.log("END CALL TRIGGERED"); // 👈 add this
-  scheduleEndCall(assistantText);
-}
-
-  assistantText = "";
-}
 
     // user starts speaking → stop any current playback
 if (event.type === "input_audio_buffer.speech_started") {
@@ -1261,19 +1196,22 @@ if (event.type === "input_audio_buffer.speech_started") {
       if (msg.event === "media") {
         latestMediaTimestamp = msg.media.timestamp;
 
-        if (openingMessageActive) {
-    return;
-  }
+       
+if (openAiWs.readyState === WebSocket.OPEN) {
 
-        if (openAiWs.readyState === WebSocket.OPEN) {
-          openAiWs.send(
-            JSON.stringify({
-              type: "input_audio_buffer.append",
-              audio: msg.media.payload,
-            })
-          );
-        }
+  openAiWs.send(
+    JSON.stringify({
+      type: "input_audio_buffer.append",
+      audio: msg.media.payload,
+    })
+  );
 
+  openAiWs.send(
+    JSON.stringify({
+      type: "input_audio_buffer.commit"
+    })
+  );
+}
         return;
       }
 
