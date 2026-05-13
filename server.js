@@ -771,8 +771,6 @@ function scheduleEndCall(reason) {
 }
 
  async function sendSessionUpdate() {
-  const openerBlock = buildOutboundOpenerInstructionBlock(openerSpeech);
-
   const leadContext = `
 CURRENT LEAD CONTEXT:
 
@@ -807,10 +805,6 @@ Use the data only to guide better questions.
   output_modalities: ["audio"],
 
   instructions:
-    openerBlock +
-    `
-
-` +
     SYSTEM_PROMPT +
     `
 ` +
@@ -927,6 +921,8 @@ console.log(
     console.log("OPENER response.create →", source);
 
     openerInProgress = true;
+
+    console.log("FORCED OPENER:", buildSetOpener(openerSpeech));
 
     openAiWs.send(
       JSON.stringify({
@@ -1223,6 +1219,8 @@ if (event.type === "input_audio_buffer.speech_started") {
           callState = CALL_STATE.LISTENING;
           console.log("OPENER ACTUALLY FINISHED → LISTENING");
         }
+
+        console.log("OPENER FINISHED CLEANLY");
       }
 
       const text = JSON.stringify(event);
