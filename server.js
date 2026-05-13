@@ -583,6 +583,8 @@ wss.on("connection", (twilioWs) => {
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
   let openerResponseSent = false;
   let openerFallbackTimer = null;
+  /** True until first `session.updated` after our initial `session.update` (avoid opener before config applies). */
+  let openerSessionUpdatePendingAck = false;
 
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime",
@@ -801,7 +803,7 @@ Use the data only to guide better questions.
         silence_duration_ms: 1050,
         /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
         create_response: false,
-        /** Server-side barge-in cuts assistant audio; keep false until opener finishes. */
+        /** Server-side barge-in cuts assistant audio; also no Twilio→OpenAI audio while OPENING (VAD cannot "hear" the callee mid-opener). */
         interrupt_response: false,
       }
     },
@@ -822,7 +824,7 @@ console.log(
   JSON.stringify(sessionUpdate, null, 2)
 );
 
-   
+  openerSessionUpdatePendingAck = true;
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
@@ -918,6 +920,8 @@ console.log(
     if (openerResponseSent) return;
     if (openAiWs.readyState !== WebSocket.OPEN) return;
 
+    openerSessionUpdatePendingAck = false;
+
     openerResponseSent = true;
 
     if (openerFallbackTimer) {
@@ -973,14 +977,10 @@ openAiWs.on("open", async () => {
   
   await sendSessionUpdate();
 
-  setTimeout(() => {
-    sendOpenerResponseOnce("post_session_update_tick");
-  }, 200);
-
   openerFallbackTimer = setTimeout(() => {
     openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_opener");
-  }, 1600);
+    sendOpenerResponseOnce("fallback_opener_no_session_ack");
+  }, 1200);
   });
 
 let fullTranscript = ""; 
@@ -989,6 +989,16 @@ openAiWs.on("message", (data) => {
   try {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
+
+    if (event.type === "session.updated") {
+      if (
+        openerSessionUpdatePendingAck &&
+        callState === CALL_STATE.OPENING &&
+        !openerResponseSent
+      ) {
+        sendOpenerResponseOnce("session_updated_ack");
+      }
+    }
 
     if (event.type === "response.output_audio.delta") {
 
@@ -1280,8 +1290,10 @@ if (event.type === "input_audio_buffer.speech_started") {
    if (msg.event === "media") {
   latestMediaTimestamp = msg.media.timestamp;
 
-  if (openAiWs.readyState === WebSocket.OPEN) {
-
+  if (
+    openAiWs.readyState === WebSocket.OPEN &&
+    callState !== CALL_STATE.OPENING
+  ) {
     openAiWs.send(
       JSON.stringify({
         type: "input_audio_buffer.append",
