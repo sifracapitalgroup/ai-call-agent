@@ -785,7 +785,7 @@ Use the data only to guide better questions.
   type: "session.update",
   session: {
   type: "realtime",
-  output_modalities: ["audio"],
+  modalities: ["audio"],
 
   instructions:
     openerBlock +
@@ -808,9 +808,6 @@ Use the data only to guide better questions.
         threshold: 0.97,
         prefix_padding_ms: 700,
         silence_duration_ms: 1050,
-        /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
-        create_response: false,
-        /** Server-side barge-in cuts assistant audio; also no Twilio→OpenAI audio while OPENING (VAD cannot "hear" the callee mid-opener). */
         interrupt_response: false,
       }
     },
@@ -1332,17 +1329,21 @@ if (event.type === "input_audio_buffer.speech_started") {
    if (msg.event === "media") {
   latestMediaTimestamp = msg.media.timestamp;
 
-  if (
-    openAiWs.readyState === WebSocket.OPEN &&
-    !openerLock
-  ) {
-    openAiWs.send(
-      JSON.stringify({
-        type: "input_audio_buffer.append",
-        audio: msg.media.payload,
-      })
-    );
-  }
+ if (openAiWs.readyState === WebSocket.OPEN) {
+
+  openAiWs.send(
+    JSON.stringify({
+      type: "input_audio_buffer.append",
+      audio: msg.media.payload,
+    })
+  );
+
+  openAiWs.send(
+    JSON.stringify({
+      type: "input_audio_buffer.commit"
+    })
+  );
+}
 
   return;
 }
