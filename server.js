@@ -32,6 +32,19 @@ const wss = new WebSocket.Server({
   path: "/media-stream",
 });
 
+/** Lightweight call lifecycle (single source of truth for mode gating). */
+const CALL_STATE = Object.freeze({
+  IDLE: "IDLE",
+  OPENING: "OPENING",
+  LISTENING: "LISTENING",
+  RESPONDING: "RESPONDING",
+  INTERRUPTING: "INTERRUPTING",
+  VOICEMAIL: "VOICEMAIL",
+  WRONG_NUMBER: "WRONG_NUMBER",
+  ENDING: "ENDING",
+  ENDED: "ENDED",
+});
+
 const SYSTEM_PROMPT = `
 You are Daniel, a real estate investor calling property owners.
 
@@ -353,9 +366,15 @@ function normalizeAddressForSpeech(address) {
   let callSid = null;
   let latestMediaTimestamp = 0;
   let responseStartTimestamp = null;
-  let lastAssistantItem = null;;
+  let lastAssistantItem = null;
   let fullCallTranscript = "";
-  let callEndingScheduled = false;
+  let callState = CALL_STATE.IDLE;
+  /** Post-opener seller lines appended to fullTranscript for classification. */
+  let sellerEngagedPostOpener = false;
+  /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
+  let sellerUtteranceDetected = false;
+  let hangupAfterOpenerTimer = null;
+  let hangupTaskScheduled = false;
   let leadFirst_name = currentCallLead.first_name || "there";
   let leadAddress = normalizeAddressForSpeech(
   (currentCallLead.address || "your property")
@@ -503,8 +522,15 @@ If uncertain, choose follow_up.
 }
 
 function scheduleEndCall(reason) {
-  if (callEndingScheduled) return;
-  callEndingScheduled = true;
+  if (hangupTaskScheduled || callState === CALL_STATE.ENDED) return;
+  hangupTaskScheduled = true;
+
+  if (
+    callState !== CALL_STATE.VOICEMAIL &&
+    callState !== CALL_STATE.WRONG_NUMBER
+  ) {
+    callState = CALL_STATE.ENDING;
+  }
 
   console.log("AUTO ENDING CALL:", reason);
 
@@ -608,14 +634,14 @@ console.log(
   }
 
  function interruptAssistant() {
-
-  // DO NOT interrupt during opener
-  if (openingMessageActive) {
+  if (callState === CALL_STATE.OPENING) {
     console.log("IGNORING INTERRUPTION DURING OPENER");
     return;
   }
 
   if (!lastAssistantItem || responseStartTimestamp === null) return;
+
+  callState = CALL_STATE.INTERRUPTING;
 
   const elapsedMs = latestMediaTimestamp - responseStartTimestamp;
 
@@ -637,7 +663,7 @@ console.log(
 openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
-  openingMessageActive = true;
+  callState = CALL_STATE.OPENING;
   
   await sendSessionUpdate();
 
@@ -659,19 +685,15 @@ Keep it conversational, calm, and concise.
   })
 );
 
-setTimeout(() => {
-  openingMessageActive = false;
-  console.log("OPENER COMPLETE");
+hangupAfterOpenerTimer = setTimeout(() => {
+  if (callState === CALL_STATE.OPENING) {
+    callState = CALL_STATE.LISTENING;
+    console.log("OPENER COMPLETE → LISTENING");
+  }
 }, 4000);
   });
 
 let fullTranscript = ""; 
-let sellerSpoke = false;
-let openingMessageActive = false;
-let wrongNumberDetected = false;
-
-// ✅ THEN your OpenAI handler
-
 
 openAiWs.on("message", (data) => {
   try {
@@ -680,6 +702,13 @@ openAiWs.on("message", (data) => {
     if (event.type === "response.output_audio.delta") {
 
   console.log("AUDIO DELTA RECEIVED");
+
+  if (
+    callState === CALL_STATE.LISTENING ||
+    callState === CALL_STATE.INTERRUPTING
+  ) {
+    callState = CALL_STATE.RESPONDING;
+  }
 
   if (!responseStartTimestamp) {
     responseStartTimestamp = latestMediaTimestamp;
@@ -714,7 +743,7 @@ openAiWs.on("message", (data) => {
 
 if (event.type === "conversation.item.input_audio_transcription.completed") {
 
-  sellerSpoke = true;
+  sellerUtteranceDetected = true;
 
   const transcript = (event.transcript || "").trim();
   const lowerTranscript = transcript.toLowerCase();
@@ -747,6 +776,12 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   if (isVoicemail) {
 
   console.log("VOICEMAIL DETECTED");
+
+  callState = CALL_STATE.VOICEMAIL;
+  if (hangupAfterOpenerTimer) {
+    clearTimeout(hangupAfterOpenerTimer);
+    hangupAfterOpenerTimer = null;
+  }
 
   fullTranscript += `\nVOICEMAIL: ${transcript}`;
   fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
@@ -800,7 +835,11 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   if (isWrongNumber) {
     console.log("WRONG NUMBER DETECTED");
 
-    wrongNumberDetected = true;
+    callState = CALL_STATE.WRONG_NUMBER;
+    if (hangupAfterOpenerTimer) {
+      clearTimeout(hangupAfterOpenerTimer);
+      hangupAfterOpenerTimer = null;
+    }
 
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
@@ -819,8 +858,21 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   }
   
   // =========================
-  // NORMAL HUMAN SPEECH
+  // NORMAL HUMAN SPEECH (only after opener — realtime mode)
   // =========================
+
+  const realtimeConversation =
+    callState === CALL_STATE.LISTENING ||
+    callState === CALL_STATE.RESPONDING ||
+    callState === CALL_STATE.INTERRUPTING;
+
+  if (!realtimeConversation) {
+    console.log("SELLER SPEECH DURING OPENER — deferred until LISTENING");
+    fullCallTranscript += `SELLER (during opener): ${transcript}\n`;
+    return;
+  }
+
+  sellerEngagedPostOpener = true;
 
  fullTranscript += `\nSeller: ${transcript}`;
 fullCallTranscript += `SELLER: ${transcript}\n`;
@@ -828,15 +880,22 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
   }
 
 
-    // user starts speaking → stop any current playback
+    // user starts speaking → stop any current playback (realtime mode only)
 if (event.type === "input_audio_buffer.speech_started") {
   console.log("Possible user speech detected");
 
+  if (callState === CALL_STATE.OPENING) {
+    console.log("Speech during opener — interrupt pipeline inactive");
+  } else {
  interruptAssistant();
 
   setTimeout(() => {
     clearTwilioAudio();
+    if (callState === CALL_STATE.INTERRUPTING) {
+      callState = CALL_STATE.LISTENING;
+    }
   }, 450);
+  }
 }
 
     // safety: end-call checks
@@ -845,6 +904,13 @@ if (event.type === "input_audio_buffer.speech_started") {
 
       if (shouldEndCall(text)) {
         scheduleEndCall(text);
+      }
+
+      if (
+        callState === CALL_STATE.RESPONDING ||
+        callState === CALL_STATE.INTERRUPTING
+      ) {
+        callState = CALL_STATE.LISTENING;
       }
 
       responseStartTimestamp = null;
@@ -899,7 +965,15 @@ if (event.type === "input_audio_buffer.speech_started") {
     callSid,
   });
 
+  if (hangupAfterOpenerTimer) {
+    clearTimeout(hangupAfterOpenerTimer);
+    hangupAfterOpenerTimer = null;
+  }
 
+  const wrongNumberAlreadyHandled =
+    callState === CALL_STATE.WRONG_NUMBER;
+
+  callState = CALL_STATE.ENDED;
 
 
 
@@ -955,9 +1029,9 @@ ${fullCallTranscript}
     console.log("CALL SUMMARY:", summary);
   }
 
-if (wrongNumberDetected) {
+if (wrongNumberAlreadyHandled) {
   console.log("Skipping final classification because wrong number was already detected.");
-} else if (!sellerSpoke) {
+} else if (!sellerUtteranceDetected) {
 updateGHL(
   "no_answer_voicemail",
   "No answer or voicemail reached. No meaningful seller response.",
@@ -990,6 +1064,11 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   twilioWs.on("close", () => {
     console.log("Twilio websocket closed");
 
+    if (hangupAfterOpenerTimer) {
+      clearTimeout(hangupAfterOpenerTimer);
+      hangupAfterOpenerTimer = null;
+    }
+
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
     }
@@ -1001,6 +1080,11 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
 
   openAiWs.on("close", () => {
     console.log("OpenAI websocket closed");
+
+    if (hangupAfterOpenerTimer) {
+      clearTimeout(hangupAfterOpenerTimer);
+      hangupAfterOpenerTimer = null;
+    }
   });
 
   openAiWs.on("error", (err) => {
