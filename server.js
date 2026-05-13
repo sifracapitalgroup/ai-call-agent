@@ -472,6 +472,45 @@ Examples:
 
 `;
 
+const MACHINE_PHRASES = [
+
+  "leave a message",
+  "your call has been forwarded",
+  "voice mailbox",
+  "mailbox is full",
+  "at the tone",
+  "record your message",
+  "google voice subscriber",
+  "not available",
+
+  "press 1",
+  "press one",
+  "press 2",
+  "for english",
+  "main menu",
+  "choose an option",
+  "please select",
+  "invalid selection",
+  "using your keypad",
+  "say or press",
+  "operator",
+  "extension",
+
+  "please continue",
+  "please repeat",
+  "i didn't get that",
+  "cannot process",
+];
+
+function detectMachineTranscript(text = "") {
+
+  const lower = text.toLowerCase();
+
+  return MACHINE_PHRASES.some(phrase =>
+    lower.includes(phrase)
+  );
+}
+
 
 function getPublicBaseUrl(req) {
   if (process.env.PUBLIC_BASE_URL) {
@@ -589,6 +628,13 @@ if (
     console.error("CALL STATUS ERROR:", err);
     res.sendStatus(500);
   }
+});
+
+app.post("/amd-status", (req, res) => {
+
+  console.log("AMD STATUS:", req.body);
+
+  res.sendStatus(200);
 });
 
 app.post("/recording", async (req, res) => {
@@ -725,6 +771,11 @@ app.post("/start-call", async (req, res) => {
   to: cleanPhone,
   from: process.env.TWILIO_PHONE_NUMBER,
   url: `${publicBaseUrl}/voice`,
+      
+      machineDetection: "DetectMessageEnd",
+asyncAmd: true,
+asyncAmdStatusCallback: `${publicBaseUrl}/amd-status`,
+      
   statusCallback: `${publicBaseUrl}/call-status`,
   statusCallbackEvent: ["completed", "no-answer", "busy",  "failed"],
   record: true,
@@ -772,6 +823,7 @@ wss.on("connection", (twilioWs) => {
   /** True from `response.create` for the opener until `response.done` for that response. */
   let openerInProgress = false;
   let sellerAudioEnabled = false;
+  let machineScore = 0;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
@@ -1185,7 +1237,6 @@ openAiWs.on("message", (data) => {
       }
     }
 
-
 if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   sellerUtteranceDetected = true;
@@ -1193,68 +1244,63 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   const transcript = (event.transcript || "").trim();
   const lowerTranscript = transcript.toLowerCase();
 
-  console.log("SELLER SAID:", transcript);
+  if (detectMachineTranscript(lowerTranscript)) {
 
-  // =========================
-  // VOICEMAIL DETECTION
-  // =========================
+    machineScore += 3;
 
-  const voicemailPhrases = [
-    "your call has been forwarded",
-    "automatic voice message system",
-    "please leave a message",
-    "record your message",
-    "at the tone",
-    "mailbox is full",
-    "google voice subscriber",
-    "is not available",
-    "can't take your call",
-    "leave your name and number",
-    "voice mailbox",
-    "voicemail"
-  ];
-
-  const isVoicemail = voicemailPhrases.some(phrase =>
-    lowerTranscript.includes(phrase)
-  );
-
-  if (isVoicemail) {
-
-  console.log("VOICEMAIL DETECTED");
-
-  callState = CALL_STATE.VOICEMAIL;
-  openerInProgress = false;
-
-  fullTranscript += `\nVOICEMAIL: ${transcript}`;
-  fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
-
-  // STOP OPENAI RESPONSE
-  openAiWs.send(JSON.stringify({
-    type: "response.cancel"
-  }));
-
-  // CLEAR ANY AUDIO
-  clearTwilioAudio();
-
-  // END CALL IMMEDIATELY
-  try {
-
-    twilioClient.calls(callSid).update({
-      status: "completed"
-    });
-
-    console.log("VOICEMAIL CALL ENDED");
-
-  } catch (err) {
-
-    console.error("FAILED TO END VOICEMAIL CALL:", err);
-
+    console.log("MACHINE PHRASE DETECTED");
   }
 
-  return;
-}
+  if (transcript.length > 200) {
 
-    // =========================
+    machineScore += 1;
+  }
+
+  console.log("MACHINE SCORE:", machineScore);
+
+  if (machineScore >= 4) {
+
+    console.log("VOICEMAIL / IVR DETECTED");
+
+    callState = CALL_STATE.VOICEMAIL;
+
+    openerInProgress = false;
+
+    fullTranscript += `\nVOICEMAIL: ${transcript}`;
+    fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
+
+    interruptAssistant();
+
+    openAiWs.send(JSON.stringify({
+      type: "response.cancel"
+    }));
+
+    clearTwilioAudio();
+
+    try {
+
+      twilioClient.calls(callSid).update({
+        status: "completed"
+      });
+
+      console.log("VOICEMAIL CALL ENDED");
+
+    } catch (err) {
+
+      console.error("FAILED TO END VOICEMAIL CALL:", err);
+
+    }
+
+    return;
+  }
+
+  // rest of your existing logic below
+
+console.log("SELLER SAID:", transcript);
+
+
+
+
   // WRONG NUMBER DETECTION
   // =========================
 
@@ -1416,6 +1462,8 @@ if (event.type === "input_audio_buffer.speech_started") {
       const msg = JSON.parse(raw.toString());
 
       if (msg.event === "start") {
+          machineScore = 0;
+
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
 
