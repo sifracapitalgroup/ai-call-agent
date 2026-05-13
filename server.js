@@ -114,19 +114,24 @@ const US_STATE_BY_ABBREV = Object.freeze({
 });
 
 function normalizeAddressForSpeech(address) {
-  if (!address) return "";
+if (!address) return "";
 
-  return address
-    .replace(/\bDr\b/gi, "Drive")
-    .replace(/\bRd\b/gi, "Road")
-    .replace(/\bSt\b/gi, "Street")
-    .replace(/\bAve\b/gi, "Avenue")
-    .replace(/\bBlvd\b/gi, "Boulevard")
-    .replace(/\bLn\b/gi, "Lane")
-    .replace(/\bCt\b/gi, "Court")
-    .replace(/\bPl\b/gi, "Place")
-    .replace(/\bTer\b/gi, "Terrace");
+return address
+.replace(/\bN\b/gi, "North")
+.replace(/\bS\b/gi, "South")
+.replace(/\bE\b/gi, "East")
+.replace(/\bW\b/gi, "West")
+.replace(/\bDr\b/gi, "Drive")
+.replace(/\bRd\b/gi, "Road")
+.replace(/\bSt\b/gi, "Street")
+.replace(/\bAve\b/gi, "Avenue")
+.replace(/\bBlvd\b/gi, "Boulevard")
+.replace(/\bLn\b/gi, "Lane")
+.replace(/\bCt\b/gi, "Court")
+.replace(/\bPl\b/gi, "Place")
+.replace(/\bTer\b/gi, "Terrace");
 }
+
 
 function formatSellerFirstName(firstRaw) {
   const t = String(firstRaw || "").trim();
