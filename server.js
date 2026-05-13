@@ -853,7 +853,7 @@ Use the data only to guide better questions.
   type: "session.update",
   session: {
     type: "realtime",
-     modalities: ["text"],
+     output_modalities: ["text"],
       turn_detection: {
       type: "server_vad",
       threshold: 0.97,
@@ -880,7 +880,13 @@ If a sentence can be shorter, make it shorter.
       temperature: 0.60,
     },
   };
+   
+console.log(
+  "SESSION UPDATE SENT:",
+  JSON.stringify(sessionUpdate, null, 2)
+);
 
+   
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
@@ -1044,6 +1050,7 @@ let wrongNumberDetected = false;
 
 openAiWs.on("message", (data) => {
   try {
+    console.log("RAW OPENAI:", data.toString());
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
 
