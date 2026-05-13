@@ -504,7 +504,11 @@ wss.on("connection", (twilioWs) => {
   let sellerUtteranceDetected = false;
   let hangupAfterOpenerTimer = null;
   let hangupTaskScheduled = false;
-  
+  /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
+  const pendingTwilioMediaPayloads = [];
+  const MAX_PENDING_MEDIA_CHUNKS = 4000;
+  let openerResponseSent = false;
+  let openerFallbackTimer = null;
 
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime",
@@ -741,12 +745,96 @@ console.log(
 }
 
   function clearTwilioAudio() {
+    pendingTwilioMediaPayloads.length = 0;
+
     if (!streamSid) return;
 
     twilioWs.send(
       JSON.stringify({
         event: "clear",
         streamSid,
+      })
+    );
+  }
+
+  function flushPendingAssistantAudioToTwilio() {
+    if (!streamSid || pendingTwilioMediaPayloads.length === 0) return;
+
+    console.log(
+      `TWILIO FLUSH: replaying ${pendingTwilioMediaPayloads.length} buffered assistant audio frame(s)`
+    );
+
+    while (pendingTwilioMediaPayloads.length) {
+      const payload = pendingTwilioMediaPayloads.shift();
+      twilioWs.send(
+        JSON.stringify({
+          event: "media",
+          streamSid,
+          media: { payload },
+        })
+      );
+    }
+  }
+
+  function forwardAssistantAudioToTwilio(delta) {
+    if (!delta) return;
+
+    if (streamSid) {
+      twilioWs.send(
+        JSON.stringify({
+          event: "media",
+          streamSid,
+          media: { payload: delta },
+        })
+      );
+      return;
+    }
+
+    if (pendingTwilioMediaPayloads.length === 0) {
+      console.log(
+        "TWILIO BUFFER: assistant audio arrived before stream start — buffering until streamSid"
+      );
+    }
+
+    if (pendingTwilioMediaPayloads.length >= MAX_PENDING_MEDIA_CHUNKS) {
+      console.error("TWILIO BUFFER: cap exceeded; dropping assistant audio chunk");
+      return;
+    }
+
+    pendingTwilioMediaPayloads.push(delta);
+  }
+
+  function sendOpenerResponseOnce(source) {
+    if (openerResponseSent) return;
+    if (openAiWs.readyState !== WebSocket.OPEN) return;
+
+    openerResponseSent = true;
+
+    if (openerFallbackTimer) {
+      clearTimeout(openerFallbackTimer);
+      openerFallbackTimer = null;
+    }
+
+    console.log("OPENER response.create →", source);
+
+    openAiWs.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          modalities: ["audio"],
+
+          instructions: [
+            "You are on a live outbound phone call. The moment you are connected, speak your opener — calm, confident, human, like a real acquisition caller (not telemarketing, not robotic, not overly enthusiastic).",
+            "",
+            `First say: "Hi ${openerSpeech.sellerName}?"`,
+            "Right after that, go completely quiet for about one second — a natural conversational pause, as if you left space for them to answer. Do not fill that pause with filler words or sounds.",
+            "",
+            `Then say: "This is Daniel. Would you potentially be open to selling your property on ${openerSpeech.locationClause}?"`,
+            "",
+            `Keep the location locked to this exact spoken phrase: "${openerSpeech.locationClause}". That phrase uses only the street name (no house numbers, no ZIP).`,
+            'Always pronounce the state as full spoken English words. Never read a state as separate letters (no "F L", "O H", or "T X").',
+          ].join("\n"),
+        },
       })
     );
   }
@@ -785,26 +873,10 @@ openAiWs.on("open", async () => {
   
   await sendSessionUpdate();
 
-openAiWs.send(
-  JSON.stringify({
-    type: "response.create",
-    response: {
-      modalities: ["audio"],
-
-     instructions: [
-      "You are on a live outbound phone call. The moment you are connected, speak your opener — calm, confident, human, like a real acquisition caller (not telemarketing, not robotic, not overly enthusiastic).",
-      "",
-      `First say: "Hi ${openerSpeech.sellerName}?"`,
-      "Right after that, go completely quiet for about one second — a natural conversational pause, as if you left space for them to answer. Do not fill that pause with filler words or sounds.",
-      "",
-      `Then say: "This is Daniel. Would you potentially be open to selling your property on ${openerSpeech.locationClause}?"`,
-      "",
-      `Keep the location locked to this exact spoken phrase: "${openerSpeech.locationClause}". That phrase uses only the street name (no house numbers, no ZIP).`,
-      "Always pronounce the state as full spoken English words. Never read a state as separate letters (no \"F L\", \"O H\", or \"T X\").",
-    ].join("\n"),
-    },
-  })
-);
+  openerFallbackTimer = setTimeout(() => {
+    openerFallbackTimer = null;
+    sendOpenerResponseOnce("fallback_after_session_update");
+  }, 900);
 
 hangupAfterOpenerTimer = setTimeout(() => {
   if (callState === CALL_STATE.OPENING) {
@@ -820,9 +892,18 @@ openAiWs.on("message", (data) => {
   try {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
+
+    if (event.type === "session.updated") {
+      sendOpenerResponseOnce("session.updated");
+    }
+
     if (event.type === "response.output_audio.delta") {
 
   console.log("AUDIO DELTA RECEIVED");
+
+  if (event.item_id) {
+    lastAssistantItem = event.item_id;
+  }
 
   if (
     callState === CALL_STATE.LISTENING ||
@@ -835,17 +916,7 @@ openAiWs.on("message", (data) => {
     responseStartTimestamp = latestMediaTimestamp;
   }
 
-  if (streamSid) {
-    twilioWs.send(
-      JSON.stringify({
-        event: "media",
-        streamSid,
-        media: {
-          payload: event.delta
-        }
-      })
-    );
-  }
+  forwardAssistantAudioToTwilio(event.delta);
 }
 
     if (event.type === "conversation.item.created") {
@@ -1039,7 +1110,7 @@ if (event.type === "input_audio_buffer.speech_started") {
     }
 
     if (event.type === "error") {
-      console.error("OpenAI realtime error:", event);
+      console.error("OpenAI realtime error:", event.error || event);
     }
   } catch (err) {
     console.error("OpenAI message parse error:", err);
@@ -1059,7 +1130,7 @@ if (event.type === "input_audio_buffer.speech_started") {
           callSid,
         });
 
-     
+        flushPendingAssistantAudioToTwilio();
 
         return;
       }
@@ -1089,6 +1160,11 @@ if (event.type === "input_audio_buffer.speech_started") {
   if (hangupAfterOpenerTimer) {
     clearTimeout(hangupAfterOpenerTimer);
     hangupAfterOpenerTimer = null;
+  }
+
+  if (openerFallbackTimer) {
+    clearTimeout(openerFallbackTimer);
+    openerFallbackTimer = null;
   }
 
   const wrongNumberAlreadyHandled =
@@ -1190,6 +1266,11 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
       hangupAfterOpenerTimer = null;
     }
 
+    if (openerFallbackTimer) {
+      clearTimeout(openerFallbackTimer);
+      openerFallbackTimer = null;
+    }
+
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
     }
@@ -1205,6 +1286,11 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
     if (hangupAfterOpenerTimer) {
       clearTimeout(hangupAfterOpenerTimer);
       hangupAfterOpenerTimer = null;
+    }
+
+    if (openerFallbackTimer) {
+      clearTimeout(openerFallbackTimer);
+      openerFallbackTimer = null;
     }
   });
 
