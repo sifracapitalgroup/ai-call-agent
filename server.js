@@ -1227,15 +1227,6 @@ openAiWs.on("open", async () => {
 
   callState = CALL_STATE.OPENING;
 
-  sellerAudioEnabled = false;
-
-  setTimeout(() => {
-
-    sellerAudioEnabled = true;
-
-    console.log("SELLER AUDIO ENABLED");
-
-  }, 7000);
   
   await sendSessionUpdate();
 
@@ -1524,6 +1515,16 @@ if (event.type === "input_audio_buffer.speech_started") {
       if (msg.event === "start") {
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
+
+        sellerAudioEnabled = false;
+
+setTimeout(() => {
+
+  sellerAudioEnabled = true;
+
+  console.log("SELLER AUDIO ENABLED");
+
+}, 11000);
 
         console.log("Twilio stream started:", {
           streamSid,
