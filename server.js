@@ -216,8 +216,7 @@ function buildOutboundOpenerInstructionBlock(ctx) {
     "",
     "Deliver exactly two spoken parts in order, with natural tone but verbatim wording:",
     `1) Say exactly: ${hi}`,
-    "2) Then stay completely silent for about one second (no filler, no throat clearing).",
-    `3) Say exactly: ${ask}`,
+    `2) Say exactly: ${ask}`,
     "",
     "Do not add any words before step 1. Do not add small talk between steps 1 and 3.",
     "Do not change the location phrase; it must match the session wording character-for-character (aside from normal capitalization in speech).",
@@ -308,7 +307,6 @@ TONE + DELIVERY RULES
 - Slightly curious tone at the start
 - Slow down when seller shares anything personal
 - Match their energy (short vs talkative)
-- Use light, natural fillers occasionally (“yeah…”, “got it…”)
 - NEVER stack questions
 - ALWAYS pause after key lines (~1–2 seconds)
 - Avoid monotone delivery
@@ -396,7 +394,7 @@ Give me like 30 seconds—let me just understand the property real quick
 
 PROPERTY INFO (NO PRIOR DATA)
 
-Is it owner occupied or rented out?
+Are you currently living in it or is it rented out?
 [pause]
 
 *Acknowledge* -> and go to next question
@@ -477,7 +475,7 @@ If it lines up, ill follow up with you and we can go from there—fair?
 
 EXIT
 
-Alright—I’ll take a look and get back to you
+I’ll take a look and get back to you
 Appreciate you sharing that
 
 --------------------------------------------------
