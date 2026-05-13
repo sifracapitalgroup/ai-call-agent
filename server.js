@@ -205,7 +205,7 @@ function buildOpenerSpeechContext(lead) {
 /** Mandatory first lines (session + response.create). Server fills name/location only. */
 function buildFixedOutboundOpenerScript(ctx) {
   const hi = `Hi ${ctx.sellerName}?`;
-  const ask = `This is Daniel. Would you potentially be open to selling your property on ${ctx.locationClause}?`;
+  const ask = `This is Daniel - Would you potentially be open to selling your property on ${ctx.locationClause}?`;
   return { hi, ask };
 }
 
@@ -339,9 +339,10 @@ Goal:
 
 Example:
 
-“Sounds like you’re probably not really looking right now.”
+“Sounds like you’re probably not looking right now.”
 
-“If someone came in with the right number though… you’d at least take a look, right?”
+“If someone came in with the right number though…
+you’d at least take a look, right?”
 
 “Right — so there is a number that would make sense.”
 
@@ -408,7 +409,7 @@ Goal:
 
 Examples:
 
-“If everything made sense, how soon would you want to move on it?”
+“If everything made sense - how soon would you want to move on it?”
 
 If unclear:
 
@@ -424,11 +425,11 @@ Goal:
 
 Examples:
 
-“Do you have a number in mind where you’d seriously consider selling?”
+“Do you have a number in mind - where you’d seriously consider selling?”
 
 Backup:
 
-“Got it. Just trying to understand where you’re at.”
+“Just trying to understand where you’re at.”
 
 ---
 
@@ -987,9 +988,9 @@ Mention the property address naturally.
 
       turn_detection: {
         type: "server_vad",
-        threshold: 0.97,
-        prefix_padding_ms: 700,
-        silence_duration_ms: 1050,
+        threshold: 0.76,
+        prefix_padding_ms: 850,
+        silence_duration_ms: 650,
         /** We drive the opener with an explicit `response.create`; VAD-only auto replies can starve the opener. */
         create_response: false,
         interrupt_response: true,
