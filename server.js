@@ -204,7 +204,7 @@ function buildOpenerSpeechContext(lead) {
 
 /** Mandatory first lines (session + response.create). Server fills name/location only. */
 function buildFixedOutboundOpenerScript(ctx) {
-  const hi = `Hi ${ctx.sellerName}?`;
+  const hi = `Hey ${ctx.sellerName}?...`;
   const ask = `This is Daniel. Would you potentially be open to selling your property on ${ctx.locationClause}?`;
   return { hi, ask };
 }
@@ -232,12 +232,7 @@ function buildOpenerResponseCreateInstructions(ctx) {
 const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
 
 return [
-"IMPORTANT — STRICT DELIVERY MODE",
-"",
-"For the FIRST spoken response ONLY:",
-"",
 "You MUST say the OPENING SCRIPT exactly as written.",
-"",
 "Do NOT:",
 "- paraphrase",
 "- summarize",
@@ -248,22 +243,6 @@ return [
 "- change wording",
 '- sound "more natural"',
 "- rewrite phrases",
-"",
-"Treat the opener like a strict verbal readout.",
-"",
-"OPENING SCRIPT:",
-"",
-`1) Say exactly: ${hi}`,
-"",
-"2) Then stay completely silent for about one second.",
-"",
-`3) Then say exactly: ${ask}`,
-"",
-"Do not begin conversational behavior until AFTER the seller responds.",
-"",
-"Once the seller responds:",
-"STRICT DELIVERY MODE ENDS.",
-"Return to normal conversational behavior.",
 ].join("\n");
 }
 
