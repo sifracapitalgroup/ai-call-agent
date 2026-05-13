@@ -45,6 +45,147 @@ const CALL_STATE = Object.freeze({
   ENDED: "ENDED",
 });
 
+/** Opener guard: must cover name + ~1s pause + full opener line. */
+const OPENING_GUARD_MS = 12_000;
+
+const US_STATE_BY_ABBREV = Object.freeze({
+  AL: "Alabama",
+  AK: "Alaska",
+  AZ: "Arizona",
+  AR: "Arkansas",
+  CA: "California",
+  CO: "Colorado",
+  CT: "Connecticut",
+  DE: "Delaware",
+  DC: "Washington D.C.",
+  FL: "Florida",
+  GA: "Georgia",
+  HI: "Hawaii",
+  ID: "Idaho",
+  IL: "Illinois",
+  IN: "Indiana",
+  IA: "Iowa",
+  KS: "Kansas",
+  KY: "Kentucky",
+  LA: "Louisiana",
+  ME: "Maine",
+  MD: "Maryland",
+  MA: "Massachusetts",
+  MI: "Michigan",
+  MN: "Minnesota",
+  MS: "Mississippi",
+  MO: "Missouri",
+  MT: "Montana",
+  NE: "Nebraska",
+  NV: "Nevada",
+  NH: "New Hampshire",
+  NJ: "New Jersey",
+  NM: "New Mexico",
+  NY: "New York",
+  NC: "North Carolina",
+  ND: "North Dakota",
+  OH: "Ohio",
+  OK: "Oklahoma",
+  OR: "Oregon",
+  PA: "Pennsylvania",
+  RI: "Rhode Island",
+  SC: "South Carolina",
+  SD: "South Dakota",
+  TN: "Tennessee",
+  TX: "Texas",
+  UT: "Utah",
+  VT: "Vermont",
+  VA: "Virginia",
+  WA: "Washington",
+  WV: "West Virginia",
+  WI: "Wisconsin",
+  WY: "Wyoming",
+});
+
+function normalizeAddressForSpeech(address) {
+  if (!address) return "";
+
+  return address
+    .replace(/\bDr\b/gi, "Drive")
+    .replace(/\bRd\b/gi, "Road")
+    .replace(/\bSt\b/gi, "Street")
+    .replace(/\bAve\b/gi, "Avenue")
+    .replace(/\bBlvd\b/gi, "Boulevard")
+    .replace(/\bLn\b/gi, "Lane")
+    .replace(/\bCt\b/gi, "Court")
+    .replace(/\bPl\b/gi, "Place")
+    .replace(/\bTer\b/gi, "Terrace");
+}
+
+function formatSellerFirstName(firstRaw) {
+  const t = String(firstRaw || "").trim();
+  if (!t) return "there";
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+function expandUsStateForSpeech(stateRaw) {
+  const raw = String(stateRaw || "").trim();
+  if (!raw) return "";
+  const compact = raw.replace(/\./g, "").toUpperCase();
+  if (compact.length === 2 && US_STATE_BY_ABBREV[compact]) {
+    return US_STATE_BY_ABBREV[compact];
+  }
+  return raw
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Street line only: no leading house numbers, no ZIP, first comma segment. */
+function extractStreetLineForSpeech(addressRaw) {
+  let line = String(addressRaw || "").trim();
+  if (!line) line = "your property";
+  line = line.split(",")[0].trim();
+  line = line.replace(/^\d+[-A-Za-z]?\s+/, "").trim();
+  line = line.replace(/\s+\d{5}(-\d{4})?$/i, "").trim();
+  line = normalizeAddressForSpeech(line).trim();
+  return line || "your property";
+}
+
+function buildSpokenLocationClause(streetName, cityRaw, stateRaw) {
+  const street = String(streetName || "").trim() || "your property";
+  const city = String(cityRaw || "").trim();
+  const stateSpoken = expandUsStateForSpeech(stateRaw);
+
+  if (city && stateSpoken) return `${street} in ${city}, ${stateSpoken}`;
+  if (city) return `${street} in ${city}`;
+  if (stateSpoken) return `${street} in ${stateSpoken}`;
+  return street;
+}
+
+/** Precomputed strings for the opener + session (Realtime-safe, no SSML). */
+function buildOpenerSpeechContext(lead) {
+  const rawAddress =
+    lead.address || lead["Property Address"] || lead.streetAddress || "";
+
+  const sellerName = formatSellerFirstName(lead.first_name);
+  const streetName = extractStreetLineForSpeech(rawAddress);
+  const city = String(lead.city || "").trim();
+  const fullStateName = expandUsStateForSpeech(lead.state);
+  const locationClause = buildSpokenLocationClause(streetName, city, lead.state);
+
+  const sessionRules = [
+    `Opener location (use this exact spoken form for the opening question, and keep house numbers and ZIP codes out of speech): "${locationClause}".`,
+    `Always pronounce the U.S. state as full words in this call${
+      fullStateName ? ` (say "${fullStateName}")` : ""
+    }. Never read a state as separate letters (never "F L", "O H", or "T X").`,
+  ].join(" ");
+
+  return {
+    sellerName,
+    streetName,
+    city,
+    fullStateName,
+    locationClause,
+    sessionRules,
+  };
+}
+
 const SYSTEM_PROMPT = `
 You are Daniel, a real estate investor calling property owners.
 
@@ -79,6 +220,8 @@ Acknowledge emotional situations naturally before moving forward.
 Never say:
 - "confirm"
 - "verify"
+
+When you mention a U.S. state, say the full state name as normal English (for example Florida, Ohio, Texas). Never spell state abbreviations letter by letter.
 
 Guide the conversation naturally and keep the seller comfortable.
 `;
@@ -345,22 +488,8 @@ app.post("/start-call", async (req, res) => {
 wss.on("connection", (twilioWs) => {
   console.log("Twilio websocket connected");
 
-
-
-function normalizeAddressForSpeech(address) {
-  if (!address) return "";
-
-  return address
-    .replace(/\bDr\b/gi, "Drive")
-    .replace(/\bRd\b/gi, "Road")
-    .replace(/\bSt\b/gi, "Street")
-    .replace(/\bAve\b/gi, "Avenue")
-    .replace(/\bBlvd\b/gi, "Boulevard")
-    .replace(/\bLn\b/gi, "Lane")
-    .replace(/\bCt\b/gi, "Court")
-    .replace(/\bPl\b/gi, "Place")
-    .replace(/\bTer\b/gi, "Terrace");
-}
+  const openerSpeech = buildOpenerSpeechContext(currentCallLead);
+  console.log("SPOKEN OPENER CONTEXT:", openerSpeech);
 
   let streamSid = null;
   let callSid = null;
@@ -375,21 +504,7 @@ function normalizeAddressForSpeech(address) {
   let sellerUtteranceDetected = false;
   let hangupAfterOpenerTimer = null;
   let hangupTaskScheduled = false;
-  let leadFirst_name = currentCallLead.first_name || "there";
-  let leadAddress = normalizeAddressForSpeech(
-  (currentCallLead.address || "your property")
-    .replace(/^\d+\s*/, "")
-    .replace(/\d{5}(-\d{4})?$/, "")
-    .split(",")[0]
-    .trim()
-);
-
-if (currentCallLead.city) {
-  leadAddress += ` in ${currentCallLead.city}`;
-}
-  let leadCity = currentCallLead.city || "";
   
-
 
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime",
@@ -573,6 +688,9 @@ Do NOT read all details out loud.
 Mention the property address naturally.
 Do not sound creepy or like you're reading from a database.
 Use the data only to guide better questions.
+
+SPOKEN OPENER / ADDRESS (server-normalized for this call — follow exactly on first audio):
+${openerSpeech.sessionRules}
 `;
 
   console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
@@ -673,14 +791,17 @@ openAiWs.send(
     response: {
       modalities: ["audio"],
 
-     instructions: `
-Start the conversation naturally.
-
-Introduce yourself as Daniel and ask whether they'd potentially consider selling the property on ${leadAddress}.
-
-Keep it conversational, calm, and concise.
-
-`
+     instructions: [
+      "You are on a live outbound phone call. The moment you are connected, speak your opener — calm, confident, human, like a real acquisition caller (not telemarketing, not robotic, not overly enthusiastic).",
+      "",
+      `First say: "Hi ${openerSpeech.sellerName}?"`,
+      "Right after that, go completely quiet for about one second — a natural conversational pause, as if you left space for them to answer. Do not fill that pause with filler words or sounds.",
+      "",
+      `Then say: "This is Daniel. Would you potentially be open to selling your property on ${openerSpeech.locationClause}?"`,
+      "",
+      `Keep the location locked to this exact spoken phrase: "${openerSpeech.locationClause}". That phrase uses only the street name (no house numbers, no ZIP).`,
+      "Always pronounce the state as full spoken English words. Never read a state as separate letters (no \"F L\", \"O H\", or \"T X\").",
+    ].join("\n"),
     },
   })
 );
@@ -690,7 +811,7 @@ hangupAfterOpenerTimer = setTimeout(() => {
     callState = CALL_STATE.LISTENING;
     console.log("OPENER COMPLETE → LISTENING");
   }
-}, 4000);
+}, OPENING_GUARD_MS);
   });
 
 let fullTranscript = ""; 
