@@ -921,11 +921,6 @@ openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
 
   openingMessageActive = true;
-
-  setTimeout(() => {
-  openingMessageActive = false;
-  console.log("OPENER INTERRUPTION ENABLED");
-}, 7000);
   
   await sendSessionUpdate();
 
@@ -1016,6 +1011,17 @@ async function speakWithElevenLabs(text) {
     );
 
     console.log("ELEVEN SENT TO TWILIO");
+
+     if (!openerFinished && openingMessageActive) {
+      openerFinished = true;
+
+      // slight safety buffer after playback
+      setTimeout(() => {
+        openingMessageActive = false;
+        console.log("OPENER INTERRUPTION ENABLED");
+      }, 1200);
+    }
+    
   } catch (err) {
     console.error("ELEVEN FUNCTION ERROR:", err);
   }
