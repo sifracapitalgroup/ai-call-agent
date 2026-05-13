@@ -810,7 +810,7 @@ Use the data only to guide better questions.
         type: "audio/pcmu"
       },
 
-      voice: "alloy"
+      voice: "verse"
     }
   }
   }
