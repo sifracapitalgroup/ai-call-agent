@@ -45,9 +45,6 @@ const CALL_STATE = Object.freeze({
   ENDED: "ENDED",
 });
 
-/** Opener guard: must cover name + ~1s pause + full opener line. */
-const OPENING_GUARD_MS = 12_000;
-
 const US_STATE_BY_ABBREV = Object.freeze({
   AL: "Alabama",
   AK: "Alaska",
@@ -502,8 +499,9 @@ wss.on("connection", (twilioWs) => {
   let sellerEngagedPostOpener = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
   let sellerUtteranceDetected = false;
-  let hangupAfterOpenerTimer = null;
   let hangupTaskScheduled = false;
+  /** True from `response.create` for the opener until `response.done` for that response. */
+  let openerInProgress = false;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
@@ -820,6 +818,8 @@ console.log(
 
     console.log("OPENER response.create →", source);
 
+    openerInProgress = true;
+
     openAiWs.send(
       JSON.stringify({
         type: "response.create",
@@ -843,7 +843,7 @@ console.log(
   }
 
  function interruptAssistant() {
-  if (callState === CALL_STATE.OPENING) {
+  if (openerInProgress || callState === CALL_STATE.OPENING) {
     console.log("IGNORING INTERRUPTION DURING OPENER");
     return;
   }
@@ -884,13 +884,6 @@ openAiWs.on("open", async () => {
     openerFallbackTimer = null;
     sendOpenerResponseOnce("fallback_opener");
   }, 1600);
-
-hangupAfterOpenerTimer = setTimeout(() => {
-  if (callState === CALL_STATE.OPENING) {
-    callState = CALL_STATE.LISTENING;
-    console.log("OPENER COMPLETE → LISTENING");
-  }
-}, OPENING_GUARD_MS);
   });
 
 let fullTranscript = ""; 
@@ -973,10 +966,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   console.log("VOICEMAIL DETECTED");
 
   callState = CALL_STATE.VOICEMAIL;
-  if (hangupAfterOpenerTimer) {
-    clearTimeout(hangupAfterOpenerTimer);
-    hangupAfterOpenerTimer = null;
-  }
+  openerInProgress = false;
 
   fullTranscript += `\nVOICEMAIL: ${transcript}`;
   fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
@@ -1031,10 +1021,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
     console.log("WRONG NUMBER DETECTED");
 
     callState = CALL_STATE.WRONG_NUMBER;
-    if (hangupAfterOpenerTimer) {
-      clearTimeout(hangupAfterOpenerTimer);
-      hangupAfterOpenerTimer = null;
-    }
+    openerInProgress = false;
 
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
@@ -1079,10 +1066,16 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 if (event.type === "input_audio_buffer.speech_started") {
   console.log("Possible user speech detected");
 
-  if (callState === CALL_STATE.OPENING) {
-    console.log("Speech during opener — interrupt pipeline inactive");
-  } else {
- interruptAssistant();
+  const canInterrupt =
+    callState === CALL_STATE.LISTENING ||
+    callState === CALL_STATE.RESPONDING;
+
+  if (!canInterrupt) {
+    console.log("Ignoring speech_started during opener/startup");
+    return;
+  }
+
+  interruptAssistant();
 
   setTimeout(() => {
     clearTwilioAudio();
@@ -1090,7 +1083,6 @@ if (event.type === "input_audio_buffer.speech_started") {
       callState = CALL_STATE.LISTENING;
     }
   }, 450);
-  }
 }
 
     if (event.type === "input_audio_buffer.speech_stopped") {
@@ -1128,6 +1120,15 @@ if (event.type === "input_audio_buffer.speech_started") {
 
     // safety: end-call checks
     if (event.type === "response.done") {
+      if (openerInProgress) {
+        openerInProgress = false;
+
+        if (callState === CALL_STATE.OPENING) {
+          callState = CALL_STATE.LISTENING;
+          console.log("OPENER ACTUALLY FINISHED → LISTENING");
+        }
+      }
+
       const text = JSON.stringify(event);
 
       if (shouldEndCall(text)) {
@@ -1193,10 +1194,7 @@ if (event.type === "input_audio_buffer.speech_started") {
     callSid,
   });
 
-  if (hangupAfterOpenerTimer) {
-    clearTimeout(hangupAfterOpenerTimer);
-    hangupAfterOpenerTimer = null;
-  }
+  openerInProgress = false;
 
   if (openerFallbackTimer) {
     clearTimeout(openerFallbackTimer);
@@ -1297,15 +1295,12 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   twilioWs.on("close", () => {
     console.log("Twilio websocket closed");
 
-    if (hangupAfterOpenerTimer) {
-      clearTimeout(hangupAfterOpenerTimer);
-      hangupAfterOpenerTimer = null;
-    }
-
     if (openerFallbackTimer) {
       clearTimeout(openerFallbackTimer);
       openerFallbackTimer = null;
     }
+
+    openerInProgress = false;
 
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
@@ -1319,15 +1314,12 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   openAiWs.on("close", () => {
     console.log("OpenAI websocket closed");
 
-    if (hangupAfterOpenerTimer) {
-      clearTimeout(hangupAfterOpenerTimer);
-      hangupAfterOpenerTimer = null;
-    }
-
     if (openerFallbackTimer) {
       clearTimeout(openerFallbackTimer);
       openerFallbackTimer = null;
     }
+
+    openerInProgress = false;
   });
 
   openAiWs.on("error", (err) => {
