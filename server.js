@@ -671,7 +671,8 @@ if (currentCallLead.city) {
 
 
   const openAiWs = new WebSocket(
-"wss://api.openai.com/v1/realtime?model=gpt-realtime",
+  "wss://api.openai.com/v1/realtime?model=gpt-realtime",
+  {
     headers: {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
     },
