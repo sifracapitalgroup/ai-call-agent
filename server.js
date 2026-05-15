@@ -1357,6 +1357,11 @@ elevenWs.on("message", (data) => {
 
     if (audioChunk.audio) {
 
+      if (!firstElevenAudio) {
+  firstElevenAudio = true;
+  logTime("FIRST ELEVEN AUDIO RECEIVED");
+}
+
       console.log("ELEVEN AUDIO RECEIVED");
 
       aiSpeaking = true;
@@ -1373,6 +1378,11 @@ elevenWs.on("message", (data) => {
 
       console.log("FORWARDING AUDIO TO TWILIO");
 
+      if (!firstTwilioAudio) {
+  firstTwilioAudio = true;
+  logTime("FIRST AUDIO SENT TO TWILIO");
+}
+      
       forwardAssistantAudioToTwilio(audioChunk.audio);
 
     } else {
@@ -1425,6 +1435,10 @@ openAiWs.on("message", async (data) => {
 if (
   event.type === "response.text.delta" ||
   event.type === "response.output_text.delta"
+  if (!firstDeltaReceived) {
+  firstDeltaReceived = true;
+  logTime("FIRST OPENAI TEXT DELTA");
+}
 ) {
   const delta = event.delta ?? "";
 
@@ -1445,6 +1459,11 @@ if (
     elevenWs &&
     elevenWs.readyState === WebSocket.OPEN
   ) {
+    
+    if (!firstTextToEleven) {
+  firstTextToEleven = true;
+  logTime("FIRST TEXT SENT TO ELEVEN");
+}
 
     elevenWs.send(JSON.stringify({
      text: elevenBuffer,
