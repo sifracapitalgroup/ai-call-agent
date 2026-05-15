@@ -1332,9 +1332,7 @@ elevenWs = new WebSocket(
   }
 );
 
-elevenWs.on("open", () => {
-  console.log("Connected to ElevenLabs");
-  
+elevenWs.on("open", async () => {  console.log("Connected to ElevenLabs");
  elevenWs.send(JSON.stringify({
   text: " ",
   voice_settings: {
