@@ -1228,24 +1228,25 @@ Mention the property address naturally if helpful.
     leadContext,
 
   audio: {
-    input: {
-      format: {
-        type: "audio/pcmu"
-      },
+  input: {
+    format: {
+      type: "audio/pcmu"
+    },
 
-      turn_detection: {
-        type: "server_vad",
-        threshold: 0.95,
-        prefix_padding_ms: 500,
-        silence_duration_ms: 1000,
-        create_response: false,
-        interrupt_response: true,
-      }
+    transcription: {
+      model: "gpt-4o-mini-transcribe"
+    },
+
+    turn_detection: {
+      type: "server_vad",
+      threshold: 0.85,
+      prefix_padding_ms: 700,
+      silence_duration_ms: 1000,
+      create_response: false,
+      interrupt_response: true,
     }
   }
- }
-};
-
+}
    
    
   openAiWs.send(JSON.stringify(sessionUpdate));
