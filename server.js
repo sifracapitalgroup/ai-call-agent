@@ -1435,11 +1435,13 @@ openAiWs.on("message", async (data) => {
 if (
   event.type === "response.text.delta" ||
   event.type === "response.output_text.delta"
-  if (!firstDeltaReceived) {
-  firstDeltaReceived = true;
-  logTime("FIRST OPENAI TEXT DELTA");
-}
 ) {
+
+  if (!firstDeltaReceived) {
+    firstDeltaReceived = true;
+    logTime("FIRST OPENAI TEXT DELTA");
+  }
+
   const delta = event.delta ?? "";
 
   assistantTextBuffer += delta;
