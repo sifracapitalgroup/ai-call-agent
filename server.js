@@ -1436,7 +1436,7 @@ if (
   console.log("AI TEXT DELTA:", delta);
 
   const shouldFlush = openerStreamingMode
-  ? elevenBuffer.length >= 15
+  ? elevenBuffer.length >= 50
   : (
       elevenBuffer.includes(".") ||
       elevenBuffer.includes("?") ||
