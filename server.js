@@ -569,7 +569,17 @@ async function updateGHL(outcome, summary, phoneOverride) {
       console.warn("GHL UPDATE SKIPPED: missing phone/email identifier for upsert");
       return;
     }
+    
+const TAG_BY_OUTCOME = {
+  no_answer_voicemail: "ai_no_answer",
+  follow_up: "ai_follow_up",
+  interested: "ai_interested",
+  not_interested: "ai_not_interested",
+  wrong_number: "ai_wrong_number",
+};
 
+const outcomeTag = TAG_BY_OUTCOME[outcome];
+    
     const response = await fetch(upsertUrl, {
       method: "POST",
       headers: {
@@ -578,9 +588,10 @@ async function updateGHL(outcome, summary, phoneOverride) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        locationId: process.env.GHL_LOCATION_ID,
-        phone: phoneOverride,
-        customFields: [
+  locationId: process.env.GHL_LOCATION_ID,
+  phone: phoneOverride,
+  tags: outcomeTag ? [outcomeTag] : [],
+  customFields: [
           {
             key: "ai_call_outcome",
             field_value: outcome,
