@@ -1669,7 +1669,7 @@ console.log("SELLER SAID:", transcript);
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
 
     updateGHL(
-      "ai_wrong_number",
+      "wrong_number",
       "Contact stated this is a wrong number.",
       currentCallLead.phone
     );
