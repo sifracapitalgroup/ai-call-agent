@@ -988,36 +988,97 @@ let firstTwilioAudio = false;
 
 async function classifyCall(transcript) {
   try {
-  if (!transcript || transcript.trim().length < 10) {
-  return {
-    ai_call_outcome: "no_answer_voicemail",
-    call_summary: "No answer or voicemail reached.",
-  };
-}
+    const text = String(transcript || "").toLowerCase();
 
-const lowerTranscript = transcript.toLowerCase();
+    if (!transcript || transcript.trim().length < 10) {
+      return {
+        ai_call_outcome: "follow_up",
+        call_summary: "Seller answered but the conversation was too short to classify clearly.",
+      };
+    }
 
-const rejectionPhrases = [
-  "not interested",
-  "no thanks",
-  "i'm good",
-  "im good",
-  "stop calling",
-  "remove me",
-  "take me off",
-  "don't call",
-  "do not call",
-  "not selling",
-  "already sold",
-];
+    const wrongNumberPhrases = [
+      "wrong number",
+      "you have the wrong number",
+      "not my property",
+      "i don't own that",
+      "i dont own that",
+      "who is this for",
+    ];
 
-if (rejectionPhrases.some((phrase) => lowerTranscript.includes(phrase))) {
-  return {
-    ai_call_outcome: "not_interested",
-    call_summary: "Seller clearly rejected the call or said they are not interested.",
-  };
-}
-    
+    if (wrongNumberPhrases.some((p) => text.includes(p))) {
+      return {
+        ai_call_outcome: "wrong_number",
+        call_summary: "Person indicated this is the wrong number or they do not own the property.",
+      };
+    }
+
+    const notInterestedPhrases = [
+      "not interested",
+      "no thanks",
+      "i'm good",
+      "im good",
+      "stop calling",
+      "remove me",
+      "take me off",
+      "don't call",
+      "do not call",
+      "not selling",
+      "already sold",
+    ];
+
+    if (notInterestedPhrases.some((p) => text.includes(p))) {
+      return {
+        ai_call_outcome: "not_interested",
+        call_summary: "Seller clearly rejected the call or said they are not interested.",
+      };
+    }
+
+    const interestedPhrases = [
+      "what would you offer",
+      "make me an offer",
+      "send me an offer",
+      "how much",
+      "what's your offer",
+      "whats your offer",
+      "i would sell",
+      "i'd sell",
+      "i am interested",
+      "i'm interested",
+      "possibly selling",
+      "open to selling",
+      "yes i'm open",
+      "yes im open",
+    ];
+
+    if (interestedPhrases.some((p) => text.includes(p))) {
+      return {
+        ai_call_outcome: "interested",
+        call_summary: "Seller showed interest in selling or asked about an offer/next steps.",
+      };
+    }
+
+    const followUpPhrases = [
+      "call me back",
+      "call back",
+      "follow up",
+      "later",
+      "not right now",
+      "maybe",
+      "send me more information",
+      "i need to think",
+      "talk another time",
+      "busy",
+      "at work",
+    ];
+
+    if (followUpPhrases.some((p) => text.includes(p))) {
+      return {
+        ai_call_outcome: "follow_up",
+        call_summary: "Seller answered and requested follow up or seemed unsure.",
+      };
+    }
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -1033,25 +1094,18 @@ if (rejectionPhrases.some((phrase) => lowerTranscript.includes(phrase))) {
             content: `
 You classify real estate seller calls.
 
-Return ONLY valid JSON with:
+Return ONLY valid JSON:
 {
-  "ai_call_outcome": "no_answer_voicemail | follow_up | interested | not_interested",
+  "ai_call_outcome": "follow_up | interested | not_interested | wrong_number",
   "call_summary": "short summary"
 }
 
-Rules:
-- no_answer_voicemail = no meaningful conversation, voicemail, no answer, immediate hangup
-- interested = seller is open to selling, gives price/timeline/condition, wants an offer, asks for next steps
-- not_interested = ANY clear rejection, including:
-  "not interested"
-  "stop calling"
-  "remove me"
-  "already sold"
-  "take me off your list"
-- follow_up = seller is unsure, says maybe later, asks to call back, needs time, or conversation is unclear
-
-CRITICAL:
-If the seller says "not interested" return "not_interested".
+Important:
+- Only classify no answer outside this function. If this function is called, a human likely answered.
+- wrong_number = person says wrong number, not their property, or they do not own it.
+- interested = seller is open to selling, asks about price/offer, gives timeline/condition, or wants next steps.
+- not_interested = seller clearly rejects, says not interested, stop calling, remove me, already sold, or not selling.
+- follow_up = seller is unsure, busy, says maybe later, asks to call back, needs time, or conversation is unclear.
 
 If uncertain, choose follow_up.
 `,
@@ -1068,10 +1122,10 @@ If uncertain, choose follow_up.
     const parsed = JSON.parse(data.choices[0].message.content);
 
     const allowed = [
-      "no_answer_voicemail",
       "follow_up",
       "interested",
       "not_interested",
+      "wrong_number",
     ];
 
     if (!allowed.includes(parsed.ai_call_outcome)) {
