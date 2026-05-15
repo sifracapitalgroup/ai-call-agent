@@ -1230,11 +1230,11 @@ Mention the property address naturally if helpful.
   audio: {
   input: {
     format: {
-      type: "audio/pcmu"
+      type: "audio/pcmu",
     },
 
     transcription: {
-      model: "gpt-4o-mini-transcribe"
+      model: "gpt-4o-mini-transcribe",
     },
 
     turn_detection: {
@@ -1244,9 +1244,13 @@ Mention the property address naturally if helpful.
       silence_duration_ms: 1000,
       create_response: false,
       interrupt_response: true,
-    }
-  }
-}
+    },
+  },
+},
+},
+};
+
+openAiWs.send(JSON.stringify(sessionUpdate));
    
    
   openAiWs.send(JSON.stringify(sessionUpdate));
