@@ -878,11 +878,27 @@ app.post("/start-call", async (req, res) => {
   }
 });
 
+
+
+
+
 wss.on("connection", (twilioWs) => {
   console.log("Twilio websocket connected");
 
   const openerSpeech = buildOpenerSpeechContext(currentCallLead);
   console.log("SPOKEN OPENER CONTEXT:", openerSpeech);
+
+  const callStartTime = Date.now();
+
+function logTime(label) {
+  const elapsed = Date.now() - callStartTime;
+  console.log(`[${elapsed}ms] ${label}`);
+}
+
+let firstDeltaReceived = false;
+let firstTextToEleven = false;
+let firstElevenAudio = false;
+let firstTwilioAudio = false;
 
   let streamSid = null;
   let callSid = null;
@@ -1098,7 +1114,9 @@ Mention the property address naturally.
 
   console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
 
+   logTime("SESSION.UPDATE SENT");
  const sessionUpdate = {
+   
   type: "session.update",
   session: {
   type: "realtime",
@@ -1218,8 +1236,10 @@ console.log(
 
     openerInProgress = true;
 
+    logTime("RESPONSE.CREATE SENT");
     openAiWs.send(
       JSON.stringify({
+        
         type: "response.create",
         response: {
           instructions: buildOpenerResponseCreateInstructions(openerSpeech),
@@ -1270,7 +1290,7 @@ console.log(
 
 openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
-
+logTime("OPENAI WS OPEN");
   callState = CALL_STATE.OPENING;
 elevenWs = new WebSocket(
   `wss://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream-input?output_format=ulaw_8000&model_id=eleven_flash_v2_5`,
