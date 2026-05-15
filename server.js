@@ -1423,48 +1423,47 @@ openAiWs.on("message", async (data) => {
     const event = JSON.parse(data.toString());
     console.log("OPENAI EVENT:", event.type);
     
-if (
-  event.type === "response.output_text.delta"
-) {
-  
- const delta = event.delta ?? "";
+if (event.type === "response.output_text.delta") {
 
-assistantTextBuffer += delta;
+  const delta = event.delta ?? "";
 
-elevenBuffer += delta;
+  assistantTextBuffer += delta;
 
-console.log("AI TEXT DELTA:", delta);
+  elevenBuffer += delta;
 
-const wordCount =
-  elevenBuffer.trim().split(/\s+/).length;
+  console.log("AI TEXT DELTA:", delta);
 
-const shouldFlush =
-  elevenBuffer.includes(".") ||
-  elevenBuffer.includes("?") ||
-  elevenBuffer.includes("!") ||
-  wordCount >= 12;
+  const wordCount =
+    elevenBuffer.trim().split(/\s+/).length;
 
-if (
-  shouldFlush &&
-  elevenWs &&
-  elevenWs.readyState === WebSocket.OPEN
-) {
+  const shouldFlush =
+    elevenBuffer.includes(".") ||
+    elevenBuffer.includes("?") ||
+    elevenBuffer.includes("!") ||
+    wordCount >= 12;
 
-  const cleaned = elevenBuffer.trim();
+  if (
+    shouldFlush &&
+    elevenWs &&
+    elevenWs.readyState === WebSocket.OPEN
+  ) {
 
-  if (cleaned.length > 0) {
+    const cleaned = elevenBuffer.trim();
 
-    elevenWs.send(JSON.stringify({
-      text: cleaned
-    }));
+    if (cleaned.length > 0) {
 
-    console.log("SENT TO ELEVEN:", cleaned);
+      elevenWs.send(JSON.stringify({
+        text: cleaned
+      }));
+
+      console.log("SENT TO ELEVEN:", cleaned);
+    }
+
+    elevenBuffer = "";
   }
-
-  elevenBuffer = "";
 }
 
-}
+if (event.type === "response.output_audio.delta") {
 
   console.log("AUDIO DELTA RECEIVED");
 
