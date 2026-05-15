@@ -848,7 +848,6 @@ const call_notes =
       address:
   property_address ||
   req.body["Property Address"] ||
-  address ||
   streetAddress ||
   "your property",
       city: city || "",
