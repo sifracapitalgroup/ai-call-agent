@@ -783,25 +783,57 @@ app.post("/start-call", async (req, res) => {
 
     console.log( "RAW GHL BODY:", JSON.stringify(req.body, null, 2) );
     
-    const {
-      first_name,
-      last_name,
-      phone,
-      property_address,
-      streetAddress,
-      address,
-      city,
-      state,
-      postal_code,
-      bed,
-      bath,
-      sq_ft,
-      estimated_value,
-      year_built,
-      sale_price,
-      last_sold,
-      call_notes,
-    } = req.body;
+    const body = req.body || {};
+
+const first_name = body.first_name || body.firstName || "";
+const last_name = body.last_name || body.lastName || "";
+const full_name = body.full_name || body.fullName || body.name || "";
+const phone = body.phone || "";
+
+const property_address =
+  body.property_address ||
+  body.propertyAddress ||
+  body["Property Address"] ||
+  body.address ||
+  body.streetAddress ||
+  "";
+
+const city = body.city || "";
+const state = body.state || "";
+const postal_code = body.postal_code || body.postalCode || body.zip || "";
+
+const bed = body.bed || body.beds || body["Bed"] || "";
+const bath = body.bath || body.baths || body["Bath"] || "";
+const sq_ft = body.sq_ft || body.sqFt || body["Sq Ft"] || "";
+
+const estimated_value =
+  body.estimated_value ||
+  body.estimatedValue ||
+  body["Estimated Value"] ||
+  "";
+
+const year_built =
+  body.year_built ||
+  body.yearBuilt ||
+  body["Year Built"] ||
+  "";
+
+const sale_price =
+  body.sale_price ||
+  body.salePrice ||
+  body["Sale Price"] ||
+  "";
+
+const last_sold =
+  body.last_sold ||
+  body.lastSold ||
+  body["Last Sold"] ||
+  "";
+
+const call_notes =
+  body.call_notes ||
+  body.callNotes ||
+  "";
 
     const cleanPhone = String(phone || "").trim();
 
@@ -1092,24 +1124,23 @@ function scheduleEndCall(reason) {
   const leadContext = `
 CURRENT LEAD CONTEXT:
 
-You are calling:
 Name: ${currentCallLead.first_name || ""} ${currentCallLead.last_name || ""}
 Property Address: ${currentCallLead.address || ""}
 City: ${currentCallLead.city || ""}
 State: ${currentCallLead.state || ""}
-Zip Code: ${currentCallLead.zip || ""}
-Estimated Value: ${currentCallLead.estimatedValue || ""}
-Sq Ft: ${currentCallLead.sqft || ""}
+Zip Code: ${currentCallLead.postal_code || ""}
+Estimated Value: ${currentCallLead.estimated_value || ""}
+Sq Ft: ${currentCallLead.sq_ft || ""}
 Bed: ${currentCallLead.bed || ""}
 Bath: ${currentCallLead.bath || ""}
-Year Built: ${currentCallLead.yearBuilt || ""}
+Year Built: ${currentCallLead.year_built || ""}
 Sale Price: ${currentCallLead.sale_price || ""}
-Last Sold: ${currentCallLead.lastSold || ""}
-Call Notes: ${currentCallLead.callNotes || ""}
+Last Sold: ${currentCallLead.last_sold || ""}
+Call Notes: ${currentCallLead.call_notes || ""}
 
 Use this as background context.
-Do NOT read all details out loud.
-Mention the property address naturally.
+Do NOT read every detail out loud.
+Mention the property address naturally if helpful.
 `;
 
   console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
