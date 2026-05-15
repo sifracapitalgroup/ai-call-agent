@@ -942,6 +942,7 @@ let firstTwilioAudio = false;
   let elevenWs = null;
   let elevenBuffer = "";
   let aiSpeaking = false;
+  let openerStreamingMode = true;
   let aiSpeechTimeout = null;
   /** Post-opener seller lines appended to fullTranscript for classification. */
   let sellerEngagedPostOpener = false;
@@ -1434,11 +1435,14 @@ if (
 
   console.log("AI TEXT DELTA:", delta);
 
-  const shouldFlush =
-    elevenBuffer.includes(".") ||
-    elevenBuffer.includes("?") ||
-    elevenBuffer.includes("!") ||
-    elevenBuffer.length > 120;
+  const shouldFlush = openerStreamingMode
+  ? elevenBuffer.length >= 15
+  : (
+      elevenBuffer.includes(".") ||
+      elevenBuffer.includes("?") ||
+      elevenBuffer.includes("!") ||
+      elevenBuffer.length >= 80
+    );
 
   if (
     shouldFlush &&
@@ -1687,7 +1691,9 @@ openAiWs.send(
 
     // safety: end-call checks
    if (event.type === "response.done") {
-
+     
+  openerStreamingMode = false;
+     
   responseInProgress = false;
 
   if (
@@ -1706,6 +1712,15 @@ flush: true
     elevenBuffer = "";
   }
 
+ if (
+  elevenWs &&
+  elevenWs.readyState === WebSocket.OPEN
+) {
+  elevenWs.send(JSON.stringify({
+    text: ""
+  }));
+}
+     
   if (openerInProgress) {
     openerInProgress = false;
 
