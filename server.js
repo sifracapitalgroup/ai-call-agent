@@ -1182,11 +1182,6 @@ Mention the property address naturally if helpful.
 };
 
    
-console.log(
-  "SESSION UPDATE SENT:",
-  JSON.stringify(sessionUpdate, null, 2)
-);
-
    
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
@@ -1347,13 +1342,10 @@ elevenWs.on("open", () => {
 
 elevenWs.on("message", (data) => {
 
-  console.log("RAW ELEVEN MESSAGE:", data.toString());
-
   try {
 
     const audioChunk = JSON.parse(data.toString());
 
-    console.log("PARSED ELEVEN MESSAGE:", audioChunk);
 
     if (audioChunk.audio) {
 
@@ -1430,7 +1422,6 @@ let fullTranscript = "";
 openAiWs.on("message", async (data) => {
   try {
     const event = JSON.parse(data.toString());
-    console.log("OPENAI EVENT:", event.type);
     
 if (
   event.type === "response.text.delta" ||
