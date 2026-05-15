@@ -1171,7 +1171,7 @@ Mention the property address naturally if helpful.
 
       turn_detection: {
         type: "server_vad",
-        threshold: 0.95,
+        threshold: 0.88,
         prefix_padding_ms: 500,
         silence_duration_ms: 1000,
         create_response: false,
@@ -1335,17 +1335,19 @@ elevenWs = new WebSocket(
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
   
-  elevenWs.send(JSON.stringify({
+ elevenWs.send(JSON.stringify({
   text: " ",
   voice_settings: {
     stability: 0.45,
     similarity_boost: 0.85,
     style: 0.2,
     use_speaker_boost: true
+  },
+  generation_config: {
+    chunk_length_schedule: [180, 240, 320]
   }
 }));
-});
-
+  
 elevenWs.on("message", (data) => {
 
   console.log("RAW ELEVEN MESSAGE:", data.toString());
@@ -1424,43 +1426,47 @@ openAiWs.on("message", async (data) => {
     console.log("OPENAI EVENT:", event.type);
     
 if (
-  event.type === "response.text.delta" ||
   event.type === "response.output_text.delta"
 ) {
-  const delta = event.delta ?? "";
+  
+ const delta = event.delta ?? "";
 
-  assistantTextBuffer += delta;
+assistantTextBuffer += delta;
 
-  elevenBuffer += delta;
+elevenBuffer += delta;
 
-  console.log("AI TEXT DELTA:", delta);
+console.log("AI TEXT DELTA:", delta);
 
-  const shouldFlush =
-    elevenBuffer.includes(".") ||
-    elevenBuffer.includes("?") ||
-    elevenBuffer.includes("!") ||
-    elevenBuffer.length > 120;
+const wordCount =
+  elevenBuffer.trim().split(/\s+/).length;
 
-  if (
-    shouldFlush &&
-    elevenWs &&
-    elevenWs.readyState === WebSocket.OPEN
-  ) {
+const shouldFlush =
+  elevenBuffer.includes(".") ||
+  elevenBuffer.includes("?") ||
+  elevenBuffer.includes("!") ||
+  wordCount >= 12;
+
+if (
+  shouldFlush &&
+  elevenWs &&
+  elevenWs.readyState === WebSocket.OPEN
+) {
+
+  const cleaned = elevenBuffer.trim();
+
+  if (cleaned.length > 0) {
 
     elevenWs.send(JSON.stringify({
-     text: elevenBuffer,
-flush: true
+      text: cleaned
     }));
 
-    console.log("SENT TO ELEVEN:", elevenBuffer);
-
-    elevenBuffer = "";
+    console.log("SENT TO ELEVEN:", cleaned);
   }
 
+  elevenBuffer = "";
 }
-  
-    
-    if (event.type === "response.output_audio.delta") {
+
+}
 
   console.log("AUDIO DELTA RECEIVED");
 
@@ -1691,22 +1697,29 @@ openAiWs.send(
 
   responseInProgress = false;
 
-  if (
-    elevenBuffer &&
-    elevenWs &&
-    elevenWs.readyState === WebSocket.OPEN
-  ) {
+if (
+  elevenBuffer &&
+  elevenWs &&
+  elevenWs.readyState === WebSocket.OPEN
+) {
+
+  const cleaned = elevenBuffer.trim();
+
+  if (cleaned.length > 0) {
 
     elevenWs.send(JSON.stringify({
-     text: elevenBuffer,
-flush: true
+      text: cleaned
     }));
 
-    console.log("FINAL ELEVEN FLUSH:", elevenBuffer);
+    console.log("FINAL ELEVEN FLUSH:", cleaned);
 
-    elevenBuffer = "";
+    elevenWs.send(JSON.stringify({
+      text: ""
+    }));
   }
 
+  elevenBuffer = "";
+}
   if (openerInProgress) {
     openerInProgress = false;
 
