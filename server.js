@@ -661,8 +661,11 @@ app.all("/voice", (req, res) => {
 
   console.log("VOICE HIT:", wsUrl);
 
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+  const firstName = currentCallLead?.first_name || "there";
+
+const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <Say voice="Polly.Matthew">Hey ${firstName}?</Say>
   <Connect>
     <Stream url="${wsUrl}" />
   </Connect>
@@ -1477,15 +1480,6 @@ elevenWs.on("close", (code, reason) => {
 });
   
   await sendSessionUpdate();
-
-  setTimeout(() => {
-    sendOpenerResponseOnce("post_session_update_tick");
-  }, 200);
-
-  openerFallbackTimer = setTimeout(() => {
-    openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_opener");
-  }, 1600);
   });
 
 let fullTranscript = ""; 
