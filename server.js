@@ -1234,23 +1234,25 @@ Mention the property address naturally if helpful.
     },
 
     transcription: {
-  model: "gpt-4o-mini-transcribe",
-},
+      model: "gpt-4o-mini-transcribe",
+    },
 
-turn_detection: {
-  type: "server_vad",
-  threshold: 0.85,
-  prefix_padding_ms: 700,
-  silence_duration_ms: 1000,
-  create_response: false,
-  interrupt_response: true,
-},
-
-output: {
-  format: {
-    type: "audio/pcmu",
+    turn_detection: {
+      type: "server_vad",
+      threshold: 0.85,
+      prefix_padding_ms: 700,
+      silence_duration_ms: 1000,
+      create_response: false,
+      interrupt_response: true,
+    },
   },
-  voice: "verse",
+
+  output: {
+    format: {
+      type: "audio/pcmu",
+    },
+    voice: "verse",
+  },
 },
 },
 };
