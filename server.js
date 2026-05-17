@@ -1398,32 +1398,16 @@ elevenWs = new WebSocket(
 
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
-
+  
   elevenWs.send(JSON.stringify({
-    text: " ",
-    voice_settings: {
-      stability: 0.45,
-      similarity_boost: 0.85,
-      style: 0.2,
-      use_speaker_boost: true
-    },
-    generation_config: {
-      chunk_length_schedule: [50, 90, 120]
-    }
-  }));
-
-  const immediateOpenerText = `Hey ${currentCallLead?.first_name || "there"}? `;
-
-  setTimeout(() => {
-    if (elevenWs && elevenWs.readyState === WebSocket.OPEN) {
-      elevenWs.send(JSON.stringify({
-        text: immediateOpenerText,
-        try_trigger_generation: true
-      }));
-
-      console.log("IMMEDIATE OPENER SENT:", immediateOpenerText);
-    }
-  }, 100);
+  text: " ",
+  voice_settings: {
+    stability: 0.45,
+    similarity_boost: 0.85,
+    style: 0.2,
+    use_speaker_boost: true
+  }
+}));
 });
 
 elevenWs.on("message", (data) => {
@@ -1492,7 +1476,17 @@ elevenWs.on("close", (code, reason) => {
 });
   
   await sendSessionUpdate();
-  
+
+  setTimeout(() => {
+    sendOpenerResponseOnce("post_session_update_tick");
+  }, 200);
+
+  openerFallbackTimer = setTimeout(() => {
+    openerFallbackTimer = null;
+    sendOpenerResponseOnce("fallback_opener");
+  }, 1600);
+  });
+
 let fullTranscript = ""; 
 
 openAiWs.on("message", async (data) => {
@@ -2018,12 +2012,11 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
     openerInProgress = false;
   });
 
-    openAiWs.on("error", (err) => {
+  openAiWs.on("error", (err) => {
     console.error("OpenAI websocket error:", err);
   });
 });
 
-});
-
 server.listen(PORT, () => {
-  });
+  console.log(`Server running on port ${PORT}`);
+});
