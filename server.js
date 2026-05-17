@@ -1398,16 +1398,32 @@ elevenWs = new WebSocket(
 
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
-  
+
   elevenWs.send(JSON.stringify({
-  text: " ",
-  voice_settings: {
-    stability: 0.45,
-    similarity_boost: 0.85,
-    style: 0.2,
-    use_speaker_boost: true
-  }
-}));
+    text: " ",
+    voice_settings: {
+      stability: 0.45,
+      similarity_boost: 0.85,
+      style: 0.2,
+      use_speaker_boost: true
+    },
+    generation_config: {
+      chunk_length_schedule: [50, 90, 120]
+    }
+  }));
+
+  const immediateOpenerText = `Hey ${currentCallLead?.first_name || "there"}? `;
+
+  setTimeout(() => {
+    if (elevenWs.readyState === WebSocket.OPEN) {
+      elevenWs.send(JSON.stringify({
+        text: immediateOpenerText,
+        try_trigger_generation: true
+      }));
+
+      console.log("IMMEDIATE OPENER SENT:", immediateOpenerText);
+    }
+  }, 100);
 });
 
 elevenWs.on("message", (data) => {
