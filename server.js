@@ -1215,7 +1215,7 @@ Mention the property address naturally if helpful.
   type: "session.update",
   session: {
   type: "realtime",
-  output_modalities: ["audio"],
+  output_modalities: ["text"],
 
   instructions:
     openerBlock +
@@ -1246,18 +1246,14 @@ Mention the property address naturally if helpful.
       interrupt_response: true,
     },
   },
-
-  output: {
-    format: {
-      type: "audio/pcmu",
-    },
-    voice: "verse",
-  },
 },
 },
 };
 
 openAiWs.send(JSON.stringify(sessionUpdate));
+   
+   
+  openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
   function clearTwilioAudio() {
