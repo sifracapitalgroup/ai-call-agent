@@ -1477,14 +1477,24 @@ elevenWs.on("close", (code, reason) => {
   
   await sendSessionUpdate();
 
-  setTimeout(() => {
-    sendOpenerResponseOnce("post_session_update_tick");
-  }, 200);
+if (elevenWs && elevenWs.readyState === WebSocket.OPEN) {
+  openerInProgress = true;
+  callState = CALL_STATE.OPENING;
 
-  openerFallbackTimer = setTimeout(() => {
-    openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_opener");
-  }, 1600);
+  elevenWs.send(JSON.stringify({
+    text: openerSpeech,
+    flush: true,
+  }));
+
+  console.log("SENT OPENER DIRECTLY TO ELEVEN:", openerSpeech);
+}
+
+openerFallbackTimer = setTimeout(() => {
+  openerInProgress = false;
+  callState = CALL_STATE.LISTENING;
+  sellerAudioEnabled = true;
+  console.log("OPENER TIMER FINISHED → SELLER AUDIO ENABLED");
+}, 8250);
   });
 
 let fullTranscript = ""; 
