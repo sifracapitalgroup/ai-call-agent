@@ -1398,16 +1398,22 @@ elevenWs = new WebSocket(
 
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
-  
+
+  const immediateOpenerText = `Hey ${currentCallLead?.first_name || "there"}?`;
+
   elevenWs.send(JSON.stringify({
-  text: " ",
-  voice_settings: {
-    stability: 0.45,
-    similarity_boost: 0.85,
-    style: 0.2,
-    use_speaker_boost: true
-  }
-}));
+    text: immediateOpenerText,
+    flush: true,
+    voice_settings: {
+      stability: 0.45,
+      similarity_boost: 0.85,
+      style: 0.2,
+      use_speaker_boost: true
+    }
+  }));
+
+  console.log("IMMEDIATE OPENER SENT:", immediateOpenerText);
+});
 
 elevenWs.on("message", (data) => {
 
@@ -1475,15 +1481,6 @@ elevenWs.on("close", (code, reason) => {
 });
   
   await sendSessionUpdate();
-
-setTimeout(() => {
-  sendOpenerResponseOnce("post_session_update_tick");
-}, 200);
-
-openerFallbackTimer = setTimeout(() => {
-  openerFallbackTimer = null;
-  sendOpenerResponseOnce("fallback_opener");
-}, 1600);
   
 let fullTranscript = ""; 
 
