@@ -1215,7 +1215,7 @@ Mention the property address naturally if helpful.
   type: "session.update",
   session: {
   type: "realtime",
-  output_modalities: ["text"],
+  output_modalities: ["audio"],
 
   instructions:
     openerBlock +
@@ -1234,26 +1234,28 @@ Mention the property address naturally if helpful.
     },
 
     transcription: {
-      model: "gpt-4o-mini-transcribe",
-    },
+  model: "gpt-4o-mini-transcribe",
+},
 
-    turn_detection: {
-      type: "server_vad",
-      threshold: 0.85,
-      prefix_padding_ms: 700,
-      silence_duration_ms: 1000,
-      create_response: false,
-      interrupt_response: true,
-    },
+turn_detection: {
+  type: "server_vad",
+  threshold: 0.85,
+  prefix_padding_ms: 700,
+  silence_duration_ms: 1000,
+  create_response: false,
+  interrupt_response: true,
+},
+
+output: {
+  format: {
+    type: "audio/pcmu",
   },
+  voice: "verse",
 },
 },
 };
 
 openAiWs.send(JSON.stringify(sessionUpdate));
-   
-   
-  openAiWs.send(JSON.stringify(sessionUpdate));
 }
 
   function clearTwilioAudio() {
