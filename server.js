@@ -2007,11 +2007,12 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
     openerInProgress = false;
   });
 
-  openAiWs.on("error", (err) => {
+    openAiWs.on("error", (err) => {
     console.error("OpenAI websocket error:", err);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
+
+server.listen(PORT, () => {
+  });
