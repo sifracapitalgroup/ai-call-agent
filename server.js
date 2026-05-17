@@ -1399,20 +1399,31 @@ elevenWs = new WebSocket(
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
 
-  const immediateOpenerText = `Hey ${currentCallLead?.first_name || "there"}?`;
-
   elevenWs.send(JSON.stringify({
-    text: immediateOpenerText,
-    flush: true,
+    text: " ",
     voice_settings: {
       stability: 0.45,
       similarity_boost: 0.85,
       style: 0.2,
       use_speaker_boost: true
+    },
+    generation_config: {
+      chunk_length_schedule: [50, 90, 120]
     }
   }));
 
-  console.log("IMMEDIATE OPENER SENT:", immediateOpenerText);
+  const immediateOpenerText = `Hey ${currentCallLead?.first_name || "there"}? `;
+
+  setTimeout(() => {
+    if (elevenWs && elevenWs.readyState === WebSocket.OPEN) {
+      elevenWs.send(JSON.stringify({
+        text: immediateOpenerText,
+        try_trigger_generation: true
+      }));
+
+      console.log("IMMEDIATE OPENER SENT:", immediateOpenerText);
+    }
+  }, 100);
 });
 
 elevenWs.on("message", (data) => {
