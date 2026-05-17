@@ -1399,12 +1399,8 @@ elevenWs = new WebSocket(
 elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
   
-  const fixedOpener = buildFixedOutboundOpenerScript(openerSpeech);
-const immediateOpenerText = `${fixedOpener.hi} ${fixedOpener.ask}`;
-
-elevenWs.send(JSON.stringify({
-  text: immediateOpenerText,
-  flush: true,
+  elevenWs.send(JSON.stringify({
+  text: " ",
   voice_settings: {
     stability: 0.45,
     similarity_boost: 0.85,
@@ -1412,9 +1408,6 @@ elevenWs.send(JSON.stringify({
     use_speaker_boost: true
   }
 }));
-
-console.log("IMMEDIATE OPENER SENT TO ELEVEN:", immediateOpenerText);
-});
 
 elevenWs.on("message", (data) => {
 
@@ -1483,16 +1476,15 @@ elevenWs.on("close", (code, reason) => {
   
   await sendSessionUpdate();
 
-// setTimeout(() => {
-//   sendOpenerResponseOnce("post_session_update_tick");
-// }, 200);
+setTimeout(() => {
+  sendOpenerResponseOnce("post_session_update_tick");
+}, 200);
 
-// openerFallbackTimer = setTimeout(() => {
-//   openerFallbackTimer = null;
-//   sendOpenerResponseOnce("fallback_opener");
-// }, 1600);
-  });
-
+openerFallbackTimer = setTimeout(() => {
+  openerFallbackTimer = null;
+  sendOpenerResponseOnce("fallback_opener");
+}, 1600);
+  
 let fullTranscript = ""; 
 
 openAiWs.on("message", async (data) => {
