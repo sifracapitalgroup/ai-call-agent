@@ -1399,7 +1399,7 @@ function interruptAssistant() {
         item: {
           type: "message",
           role: "assistant",
-          content: [{ type: "text", text: spokenLine }],
+          content: [{ type: "output_text", text: spokenLine }],
         },
       })
     );
