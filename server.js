@@ -209,24 +209,6 @@ function buildFixedOutboundOpenerScript(ctx) {
   return { hi, ask };
 }
 
-function buildOutboundOpenerInstructionBlock(ctx) {
-  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
-  return [
-    "OPENING SCRIPT — first audio after connect (non-negotiable)",
-    "",
-    "Deliver exactly two spoken parts in order, with natural tone but verbatim wording:",
-    `1) Say exactly: ${hi}`,
-    `2) Say exactly: ${ask}`,
-    "",
-    "Do not add any words before step 1. Do not add small talk between steps 1 and 3.",
-    "Do not change the location phrase; it must match the session wording character-for-character (aside from normal capitalization in speech).",
-    "",
-    ctx.sessionRules,
-    "",
-    "After the prospect answers this opening, treat the rest of the call as a normal conversation (the fixed-script rule no longer applies).",
-  ].join("\n");
-}
-
 function buildOpenerResponseCreateInstructions(ctx) {
 const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
 
