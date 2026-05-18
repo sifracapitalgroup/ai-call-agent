@@ -242,6 +242,98 @@ return [
 ].join("\n");
 }
 
+/** ElevenLabs stream-input: expressiveness presets (not semantic labels). */
+const ELEVEN_TONE_PRESETS = Object.freeze({
+  neutral: {
+    stability: 0.45,
+    similarity_boost: 0.85,
+    style: 0.2,
+    use_speaker_boost: true,
+  },
+  confidence: {
+    stability: 0.55,
+    similarity_boost: 0.85,
+    style: 0.15,
+    use_speaker_boost: true,
+  },
+  understanding: {
+    stability: 0.35,
+    similarity_boost: 0.85,
+    style: 0.28,
+    use_speaker_boost: true,
+  },
+  emphasis: {
+    stability: 0.4,
+    similarity_boost: 0.85,
+    style: 0.35,
+    use_speaker_boost: true,
+  },
+});
+
+const SELLER_PUSHBACK_PHRASES = [
+  "not interested",
+  "don't call",
+  "do not call",
+  "stop calling",
+  "no thanks",
+  "not selling",
+  "take me off",
+  "leave me alone",
+  "already told you",
+];
+
+const EMPATHY_SELLER_PHRASES = [
+  "passed away",
+  "divorce",
+  "hard time",
+  "struggling",
+  "foreclosure",
+  "probate",
+  "sick",
+  "hospital",
+];
+
+const EMPHASIS_TOPIC_WORDS = [
+  "price",
+  "number",
+  "timeline",
+  "month",
+  "months",
+  "days",
+  "offer",
+  "worth",
+  "dollar",
+  "cash",
+];
+
+function shapeTextForEleven(text) {
+  let t = String(text || "");
+  t = t.replace(/\[\[(?:tone|mode):\s*[\w-]+\]\]/gi, "");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1");
+  t = t.replace(/\s+/g, " ").trim();
+  return t;
+}
+
+function inferElevenTone(callState, lastSellerLine, assistantText) {
+  const seller = String(lastSellerLine || "").toLowerCase();
+  const assistant = String(assistantText || "").toLowerCase();
+
+  if (callState === CALL_STATE.OPENING) return "confidence";
+
+  if (
+    SELLER_PUSHBACK_PHRASES.some((p) => seller.includes(p)) ||
+    EMPATHY_SELLER_PHRASES.some((p) => seller.includes(p))
+  ) {
+    return "understanding";
+  }
+
+  if (EMPHASIS_TOPIC_WORDS.some((p) => seller.includes(p) || assistant.includes(p))) {
+    return "emphasis";
+  }
+
+  return "neutral";
+}
+
 
 const SYSTEM_PROMPT = `
 # 1. RULES
@@ -270,6 +362,16 @@ TONE + DELIVERY
 * Listen carefully before responding
 * Do not paraphrase every seller response
 * Keep acknowledgements brief and natural
+
+DELIVERY MODES (pick one per reply; never name the mode out loud)
+
+CONFIDENCE — calm, steady, declarative. Short clauses. Example shape: "Got it." / "That makes sense." / "Here's what I'd do."
+
+UNDERSTANDING — validate first, one beat, then one question. Example: "Yeah, I hear you." then "What's driving that?"
+
+EMPHASIS — stress ONE idea only (price, timeline, or location). Put the key word at the end of a short phrase.
+
+Write how you would SAY it (punctuation and short lines). Do not use tags, brackets, or markdown in spoken output.
 
 ---
 
@@ -963,6 +1065,7 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
+  let lastSellerTranscript = "";
   let directOpenerPlayed = false;
   let openerPlaybackEndTimer = null;
   /** Post-opener seller lines appended to fullTranscript for classification. */
@@ -1333,6 +1436,33 @@ function interruptAssistant() {
   return true;
 }
 
+  function sendTextToEleven(ws, rawText, options = {}) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return null;
+
+    const shaped = shapeTextForEleven(rawText);
+    if (!shaped) return null;
+
+    const tone =
+      options.tone ||
+      inferElevenTone(callState, lastSellerTranscript, shaped);
+    const voiceSettings =
+      options.voiceSettings ||
+      ELEVEN_TONE_PRESETS[tone] ||
+      ELEVEN_TONE_PRESETS.neutral;
+
+    const payload = {
+      text: shaped,
+      voice_settings: voiceSettings,
+    };
+
+    if (options.flush !== false) {
+      payload.flush = true;
+    }
+
+    ws.send(JSON.stringify(payload));
+    return { shaped, tone };
+  }
+
   function attachElevenLabsHandlers(ws) {
     ws.on("message", (data) => {
       try {
@@ -1417,18 +1547,10 @@ function interruptAssistant() {
     logTime(`DIRECT OPENER TTS (${source})`);
     console.log("DIRECT OPENER TO ELEVEN:", spokenLine);
 
-    elevenWs.send(
-      JSON.stringify({
-        text: spokenLine,
-        flush: true,
-        voice_settings: {
-          stability: 0.45,
-          similarity_boost: 0.85,
-          style: 0.2,
-          use_speaker_boost: true,
-        },
-      })
-    );
+    sendTextToEleven(elevenWs, spokenLine, {
+      tone: "confidence",
+      flush: true,
+    });
 
     if (!firstTextToEleven) {
       firstTextToEleven = true;
@@ -1461,6 +1583,17 @@ function interruptAssistant() {
       ws.on("open", () => {
         console.log("Connected to ElevenLabs");
         logTime("ELEVENLABS WS OPEN");
+
+        ws.send(
+          JSON.stringify({
+            text: " ",
+            voice_settings: ELEVEN_TONE_PRESETS.confidence,
+            generation_config: {
+              chunk_length_schedule: [50, 120, 160, 250],
+            },
+          })
+        );
+
         resolve(ws);
       });
 
@@ -1527,12 +1660,10 @@ if (
   logTime("FIRST TEXT SENT TO ELEVEN");
 }
 
-    elevenWs.send(JSON.stringify({
-     text: elevenBuffer,
-flush: true
-    }));
-
-    console.log("SENT TO ELEVEN:", elevenBuffer);
+    const sent = sendTextToEleven(elevenWs, elevenBuffer, { flush: true });
+    if (sent) {
+      console.log("SENT TO ELEVEN:", sent.shaped, `(tone: ${sent.tone})`);
+    }
 
     elevenBuffer = "";
   }
@@ -1557,6 +1688,9 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   sellerUtteranceDetected = true;
 
   const transcript = (event.transcript || "").trim();
+  if (transcript) {
+    lastSellerTranscript = transcript;
+  }
   const lowerTranscript = transcript.toLowerCase();
 
   if (detectMachineTranscript(lowerTranscript)) {
@@ -1745,12 +1879,14 @@ openAiWs.send(
     elevenWs.readyState === WebSocket.OPEN
   ) {
 
-    elevenWs.send(JSON.stringify({
-     text: elevenBuffer,
-flush: true
-    }));
-
-    console.log("FINAL ELEVEN FLUSH:", elevenBuffer);
+    const finalSent = sendTextToEleven(elevenWs, elevenBuffer, { flush: true });
+    if (finalSent) {
+      console.log(
+        "FINAL ELEVEN FLUSH:",
+        finalSent.shaped,
+        `(tone: ${finalSent.tone})`
+      );
+    }
 
     elevenBuffer = "";
   }
