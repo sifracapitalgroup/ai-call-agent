@@ -1378,7 +1378,7 @@ elevenWs.on("close", (code, reason) => {
   );
 });
   
- await sendSessionUpdate();
+  sendSessionUpdate();
 
 openAiWs.send(
   JSON.stringify({
