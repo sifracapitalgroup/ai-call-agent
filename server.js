@@ -931,8 +931,6 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
-  let aiSpeaking = false;
-  let aiSpeechTimeout = null;
   /** Post-opener seller lines appended to fullTranscript for classification. */
   let sellerEngagedPostOpener = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
@@ -1292,12 +1290,6 @@ function interruptAssistant() {
 
   clearTwilioAudio();
 
-  if (aiSpeechTimeout) {
-    clearTimeout(aiSpeechTimeout);
-    aiSpeechTimeout = null;
-  }
-
-  aiSpeaking = false;
 
   if (openAiWs.readyState === WebSocket.OPEN) {
     openAiWs.send(JSON.stringify({
@@ -1350,18 +1342,6 @@ elevenWs.on("message", (data) => {
 }
 
       console.log("ELEVEN AUDIO RECEIVED");
-
-      aiSpeaking = true;
-
-      clearTimeout(aiSpeechTimeout);
-
-      aiSpeechTimeout = setTimeout(() => {
-
-        aiSpeaking = false;
-
-        console.log("AI SPEAKING ENDED");
-
-      }, 1400);
 
       console.log("FORWARDING AUDIO TO TWILIO");
 
