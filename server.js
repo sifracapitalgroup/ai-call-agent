@@ -941,7 +941,6 @@ let firstTwilioAudio = false;
   let sellerUtteranceDetected = false;
   let hangupTaskScheduled = false;
   /** True from `response.create` for the opener until `response.done` for that response. */
-  let openerInProgress = false;
   let sellerAudioEnabled = false;
   let machineScore = 0;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
@@ -1549,8 +1548,6 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     callState = CALL_STATE.VOICEMAIL;
 
-    openerInProgress = false;
-
     fullTranscript += `\nVOICEMAIL: ${transcript}`;
     fullCallTranscript += `VOICEMAIL: ${transcript}\n`;
 
@@ -1609,8 +1606,6 @@ console.log("SELLER SAID:", transcript);
     console.log("WRONG NUMBER DETECTED");
 
     callState = CALL_STATE.WRONG_NUMBER;
-    openerInProgress = false;
-
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
     fullCallTranscript += `WRONG NUMBER: ${transcript}\n`;
 
@@ -1734,9 +1729,6 @@ flush: true
     elevenBuffer = "";
   }
 
-  if (openerInProgress) {
-    openerInProgress = false;
-
     if (callState === CALL_STATE.OPENING) {
       callState = CALL_STATE.LISTENING;
 
@@ -1829,9 +1821,6 @@ setTimeout(() => {
     streamSid,
     callSid,
   });
-
-  openerInProgress = false;
-
 
   const wrongNumberAlreadyHandled =
     callState === CALL_STATE.WRONG_NUMBER;
@@ -1927,8 +1916,6 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   twilioWs.on("close", () => {
     console.log("Twilio websocket closed");
 
-    openerInProgress = false;
-
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
     }
@@ -1941,7 +1928,6 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   openAiWs.on("close", () => {
     console.log("OpenAI websocket closed");
 
-    openerInProgress = false;
   });
 
   openAiWs.on("error", (err) => {
