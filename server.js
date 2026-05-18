@@ -209,6 +209,12 @@ function buildFixedOutboundOpenerScript(ctx) {
   return { hi, ask };
 }
 
+/** Full opener line for instant TTS (no Realtime generation wait). */
+function buildOpenerSpokenLine(ctx) {
+  const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
+  return `${hi} ${ask}`;
+}
+
 function buildOpenerResponseCreateInstructions(ctx) {
 const { hi, ask } = buildFixedOutboundOpenerScript(ctx);
 
@@ -701,11 +707,35 @@ app.post("/call-status", async (req, res) => {
   }
 });
 
-app.post("/amd-status", (req, res) => {
+app.post("/amd-status", async (req, res) => {
+  try {
+    const answeredByRaw = req.body.AnsweredBy || "";
+    const callSid = req.body.CallSid;
 
-  console.log("AMD STATUS:", req.body);
+    console.log("AMD STATUS:", req.body);
 
-  res.sendStatus(200);
+    if (callSid && isTwilioAmdMachineOrFax(answeredByRaw)) {
+      console.log("ASYNC AMD VOICEMAIL — ending call:", callSid);
+
+      const phone = resolveOutboundLeadPhone(req);
+
+      await syncTwilioAmdNoAnswerToGhl(
+        callSid,
+        answeredByRaw,
+        phone,
+        "Async AMD detected machine after connect."
+      ).catch((err) => {
+        console.error("GHL UPDATE (async AMD):", err);
+      });
+
+      await twilioClient.calls(callSid).update({ status: "completed" });
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("AMD STATUS ERROR:", err);
+    res.sendStatus(500);
+  }
 });
 
 app.post("/recording", async (req, res) => {
@@ -873,9 +903,11 @@ const call_notes =
   to: cleanPhone,
   from: process.env.TWILIO_PHONE_NUMBER,
   url: `${publicBaseUrl}/voice`,
-      
+      // Sync AMD blocks TwiML (and Media Stream) for ~4–10s after answer — use async.
       machineDetection: "Enable",
-      
+      asyncAmd: true,
+      asyncAmdStatusCallback: `${publicBaseUrl}/amd-status`,
+      asyncAmdStatusCallbackMethod: "POST",
   statusCallback: `${publicBaseUrl}/call-status`,
   statusCallbackEvent: ["completed", "no-answer", "busy",  "failed"],
   record: true,
@@ -931,8 +963,8 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
-  /** Opener TTS chunks held until punctuation or response.done (requires flush). */
-  let openerTtsBuffer = "";
+  let directOpenerPlayed = false;
+  let openerPlaybackEndTimer = null;
   /** Post-opener seller lines appended to fullTranscript for classification. */
   let sellerEngagedPostOpener = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
@@ -1316,6 +1348,10 @@ function interruptAssistant() {
             logTime("FIRST AUDIO SENT TO TWILIO");
           }
 
+          if (callState === CALL_STATE.OPENING) {
+            scheduleOpenerPlaybackEnd();
+          }
+
           forwardAssistantAudioToTwilio(audioChunk.audio);
         }
       } catch (err) {
@@ -1338,30 +1374,76 @@ function interruptAssistant() {
     });
   }
 
-  function flushOpenerTextToEleven(finalFlush = false) {
+  function scheduleOpenerPlaybackEnd() {
+    if (openerPlaybackEndTimer) {
+      clearTimeout(openerPlaybackEndTimer);
+    }
+
+    openerPlaybackEndTimer = setTimeout(() => {
+      openerPlaybackEndTimer = null;
+      if (callState !== CALL_STATE.OPENING) return;
+
+      callState = CALL_STATE.LISTENING;
+      logTime("DIRECT OPENER PLAYBACK DONE → LISTENING");
+      console.log("OPENER PLAYBACK FINISHED → LISTENING");
+    }, 1200);
+  }
+
+  function seedOpenerInOpenAiConversation(spokenLine) {
+    if (openAiWs.readyState !== WebSocket.OPEN) return;
+
+    openAiWs.send(
+      JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "text", text: spokenLine }],
+        },
+      })
+    );
+  }
+
+  function playDirectOpenerToEleven(source) {
+    if (directOpenerPlayed) return;
     if (!elevenWs || elevenWs.readyState !== WebSocket.OPEN) return;
 
-    const chunk = openerTtsBuffer;
-    if (!chunk && !finalFlush) return;
+    directOpenerPlayed = true;
+    callState = CALL_STATE.OPENING;
+
+    const spokenLine = buildOpenerSpokenLine(openerSpeech);
+
+    logTime(`DIRECT OPENER TTS (${source})`);
+    console.log("DIRECT OPENER TO ELEVEN:", spokenLine);
 
     elevenWs.send(
       JSON.stringify({
-        text: chunk,
+        text: spokenLine,
         flush: true,
+        voice_settings: {
+          stability: 0.45,
+          similarity_boost: 0.85,
+          style: 0.2,
+          use_speaker_boost: true,
+        },
       })
     );
 
-    if (chunk) {
-      if (!firstTextToEleven) {
-        firstTextToEleven = true;
-        logTime("FIRST OPENER TEXT FLUSHED TO ELEVEN");
-      }
-      console.log("OPENER TTS FLUSH:", chunk);
-    } else if (finalFlush) {
-      console.log("OPENER TTS FINAL FLUSH (empty tail)");
+    if (!firstTextToEleven) {
+      firstTextToEleven = true;
+      logTime("FIRST TEXT SENT TO ELEVEN (direct opener)");
     }
 
-    openerTtsBuffer = "";
+    fullCallTranscript += `ASSISTANT (opener): ${spokenLine}\n`;
+    seedOpenerInOpenAiConversation(spokenLine);
+
+    setTimeout(() => {
+      if (callState === CALL_STATE.OPENING) {
+        callState = CALL_STATE.LISTENING;
+        logTime("OPENER MAX DURATION FALLBACK → LISTENING");
+        console.log("OPENER MAX DURATION FALLBACK → LISTENING");
+      }
+    }, 15000);
   }
 
   function connectElevenLabs() {
@@ -1378,17 +1460,6 @@ function interruptAssistant() {
       ws.on("open", () => {
         console.log("Connected to ElevenLabs");
         logTime("ELEVENLABS WS OPEN");
-        ws.send(
-          JSON.stringify({
-            text: ".",
-            voice_settings: {
-              stability: 0.45,
-              similarity_boost: 0.85,
-              style: 0.2,
-              use_speaker_boost: true,
-            },
-          })
-        );
         resolve(ws);
       });
 
@@ -1411,15 +1482,7 @@ openAiWs.on("open", async () => {
 
   await sendSessionUpdate();
 
-  logTime("OPENER response.create SENT");
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions: buildOpenerResponseCreateInstructions(openerSpeech),
-      },
-    })
-  );
+  playDirectOpenerToEleven("post_session_update");
 });
   
 let fullTranscript = ""; 
@@ -1429,7 +1492,8 @@ openAiWs.on("message", async (data) => {
     const event = JSON.parse(data.toString());
     
 if (
-  event.type === "response.output_text.delta"
+  event.type === "response.output_text.delta" ||
+  event.type === "response.text.delta"
 ) {
 
   if (!firstDeltaReceived) {
@@ -1439,22 +1503,10 @@ if (
 
   const delta = event.delta ?? "";
 
-if (callState === CALL_STATE.OPENING) {
-  openerTtsBuffer += delta;
-
-  const shouldFlushOpener =
-    openerTtsBuffer.includes(".") ||
-    openerTtsBuffer.includes("?") ||
-    openerTtsBuffer.includes("!") ||
-    openerTtsBuffer.length > 120;
-
-  if (shouldFlushOpener) {
-    flushOpenerTextToEleven(false);
+  if (callState === CALL_STATE.OPENING) {
+    return;
   }
 
-  return;
-}
-  
   elevenBuffer += delta;
 
   const shouldFlush =
@@ -1702,13 +1754,6 @@ flush: true
     elevenBuffer = "";
   }
 
-    if (callState === CALL_STATE.OPENING) {
-      flushOpenerTextToEleven(true);
-      callState = CALL_STATE.LISTENING;
-      logTime("OPENER TEXT DONE → LISTENING (seller audio allowed)");
-      console.log("OPENER ACTUALLY FINISHED → LISTENING");
-    }
-
   const text = JSON.stringify(event);
 
   if (shouldEndCall(text)) {
@@ -1744,12 +1789,14 @@ flush: true
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
 
+        logTime("TWILIO STREAM START (streamSid ready)");
         console.log("Twilio stream started:", {
           streamSid,
           callSid,
         });
 
         flushPendingAssistantAudioToTwilio();
+        playDirectOpenerToEleven("twilio_stream_start");
 
         return;
       }
