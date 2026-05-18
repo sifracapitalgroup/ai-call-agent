@@ -970,6 +970,7 @@ let firstTwilioAudio = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
   let sellerUtteranceDetected = false;
   let hangupTaskScheduled = false;
+  let sellerAudioEnabled = false;
   let machineScore = 0;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
@@ -1789,6 +1790,13 @@ flush: true
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
 
+        sellerAudioEnabled = false;
+
+        setTimeout(() => {
+          sellerAudioEnabled = true;
+          console.log("SELLER AUDIO ENABLED");
+        }, 8250);
+
         logTime("TWILIO STREAM START (streamSid ready)");
         console.log("Twilio stream started:", {
           streamSid,
@@ -1805,8 +1813,8 @@ flush: true
 
   latestMediaTimestamp = msg.media.timestamp;
 
-  // Ignore seller audio while the opener is being generated/played
-  if (callState === CALL_STATE.OPENING) {
+  // Ignore seller audio during opener (8.25s from stream start)
+  if (!sellerAudioEnabled) {
     return;
   }
 
