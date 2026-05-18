@@ -931,13 +931,13 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
+  /** Opener TTS chunks held until punctuation or response.done (requires flush). */
+  let openerTtsBuffer = "";
   /** Post-opener seller lines appended to fullTranscript for classification. */
   let sellerEngagedPostOpener = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
   let sellerUtteranceDetected = false;
   let hangupTaskScheduled = false;
-  /** True from `response.create` for the opener until `response.done` for that response. */
-  let sellerAudioEnabled = false;
   let machineScore = 0;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
@@ -1300,94 +1300,126 @@ function interruptAssistant() {
   return true;
 }
 
-openAiWs.on("open", async () => {
-  console.log("Connected to OpenAI Realtime");
-logTime("OPENAI WS OPEN");
-  callState = CALL_STATE.OPENING;
-elevenWs = new WebSocket(
-  `wss://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream-input?output_format=ulaw_8000&model_id=eleven_flash_v2_5`,
-  {
-    headers: {
-      "xi-api-key": process.env.ELEVENLABS_API_KEY,
-    },
+  function attachElevenLabsHandlers(ws) {
+    ws.on("message", (data) => {
+      try {
+        const audioChunk = JSON.parse(data.toString());
+
+        if (audioChunk.audio) {
+          if (!firstElevenAudio) {
+            firstElevenAudio = true;
+            logTime("FIRST ELEVEN AUDIO RECEIVED");
+          }
+
+          if (!firstTwilioAudio) {
+            firstTwilioAudio = true;
+            logTime("FIRST AUDIO SENT TO TWILIO");
+          }
+
+          forwardAssistantAudioToTwilio(audioChunk.audio);
+        }
+      } catch (err) {
+        console.error("ELEVEN MESSAGE PARSE ERROR:", err);
+      }
+    });
+
+    ws.on("error", (err) => {
+      console.error("ElevenLabs websocket error:", err);
+    });
+
+    ws.on("close", (code, reason) => {
+      console.log(
+        "ElevenLabs websocket closed",
+        "code:",
+        code,
+        "reason:",
+        reason?.toString?.() || ""
+      );
+    });
   }
-);
 
-elevenWs.on("open", () => {
-  console.log("Connected to ElevenLabs");
-  
-  elevenWs.send(JSON.stringify({
-  text: ".",
-  voice_settings: {
-    stability: 0.45,
-    similarity_boost: 0.85,
-    style: 0.2,
-    use_speaker_boost: true
-  }
-}));
-});
+  function flushOpenerTextToEleven(finalFlush = false) {
+    if (!elevenWs || elevenWs.readyState !== WebSocket.OPEN) return;
 
-elevenWs.on("message", (data) => {
+    const chunk = openerTtsBuffer;
+    if (!chunk && !finalFlush) return;
 
-  try {
+    elevenWs.send(
+      JSON.stringify({
+        text: chunk,
+        flush: true,
+      })
+    );
 
-    const audioChunk = JSON.parse(data.toString());
-
-
-    if (audioChunk.audio) {
-
-      if (!firstElevenAudio) {
-  firstElevenAudio = true;
-  logTime("FIRST ELEVEN AUDIO RECEIVED");
-}
-
-      console.log("FORWARDING AUDIO TO TWILIO");
-
-      if (!firstTwilioAudio) {
-  firstTwilioAudio = true;
-  logTime("FIRST AUDIO SENT TO TWILIO");
-}
-      
-      forwardAssistantAudioToTwilio(audioChunk.audio);
-
-    } else {
-
-      console.log("NO AUDIO FIELD FOUND");
-
+    if (chunk) {
+      if (!firstTextToEleven) {
+        firstTextToEleven = true;
+        logTime("FIRST OPENER TEXT FLUSHED TO ELEVEN");
+      }
+      console.log("OPENER TTS FLUSH:", chunk);
+    } else if (finalFlush) {
+      console.log("OPENER TTS FINAL FLUSH (empty tail)");
     }
 
-  } catch (err) {
-
-    console.error("ELEVEN MESSAGE PARSE ERROR:", err);
-
+    openerTtsBuffer = "";
   }
 
-});
+  function connectElevenLabs() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(
+        `wss://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream-input?output_format=ulaw_8000&model_id=eleven_flash_v2_5`,
+        {
+          headers: {
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          },
+        }
+      );
 
-elevenWs.on("error", (err) => {
-  console.error("ElevenLabs websocket error:", err);
-});
+      ws.on("open", () => {
+        console.log("Connected to ElevenLabs");
+        logTime("ELEVENLABS WS OPEN");
+        ws.send(
+          JSON.stringify({
+            text: ".",
+            voice_settings: {
+              stability: 0.45,
+              similarity_boost: 0.85,
+              style: 0.2,
+              use_speaker_boost: true,
+            },
+          })
+        );
+        resolve(ws);
+      });
 
-elevenWs.on("close", (code, reason) => {
-  console.log(
-    "ElevenLabs websocket closed",
-    "code:",
-    code,
-    "reason:",
-    reason?.toString?.() || ""
+      ws.on("error", reject);
+    });
+  }
+
+openAiWs.on("open", async () => {
+  console.log("Connected to OpenAI Realtime");
+  logTime("OPENAI WS OPEN");
+  callState = CALL_STATE.OPENING;
+
+  try {
+    elevenWs = await connectElevenLabs();
+    attachElevenLabsHandlers(elevenWs);
+  } catch (err) {
+    console.error("ElevenLabs connection failed:", err);
+    return;
+  }
+
+  await sendSessionUpdate();
+
+  logTime("OPENER response.create SENT");
+  openAiWs.send(
+    JSON.stringify({
+      type: "response.create",
+      response: {
+        instructions: buildOpenerResponseCreateInstructions(openerSpeech),
+      },
+    })
   );
-});
-  
-await sendSessionUpdate();
-
-openAiWs.send(
-  JSON.stringify({
-    type: "response.create",
-    response: {
-      instructions: buildOpenerResponseCreateInstructions(openerSpeech),
-    },
-  })
-);
 });
   
 let fullTranscript = ""; 
@@ -1408,15 +1440,16 @@ if (
   const delta = event.delta ?? "";
 
 if (callState === CALL_STATE.OPENING) {
+  openerTtsBuffer += delta;
 
-  if (
-    elevenWs &&
-    elevenWs.readyState === WebSocket.OPEN
-  ) {
+  const shouldFlushOpener =
+    openerTtsBuffer.includes(".") ||
+    openerTtsBuffer.includes("?") ||
+    openerTtsBuffer.includes("!") ||
+    openerTtsBuffer.length > 120;
 
-    elevenWs.send(JSON.stringify({
-      text: delta
-    }));
+  if (shouldFlushOpener) {
+    flushOpenerTextToEleven(false);
   }
 
   return;
@@ -1670,8 +1703,9 @@ flush: true
   }
 
     if (callState === CALL_STATE.OPENING) {
+      flushOpenerTextToEleven(true);
       callState = CALL_STATE.LISTENING;
-
+      logTime("OPENER TEXT DONE → LISTENING (seller audio allowed)");
       console.log("OPENER ACTUALLY FINISHED → LISTENING");
     }
 
@@ -1710,16 +1744,6 @@ flush: true
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
 
-        sellerAudioEnabled = false;
-
-setTimeout(() => {
-
-  sellerAudioEnabled = true;
-
-  console.log("SELLER AUDIO ENABLED");
-
-}, 8250);
-
         console.log("Twilio stream started:", {
           streamSid,
           callSid,
@@ -1734,8 +1758,8 @@ setTimeout(() => {
 
   latestMediaTimestamp = msg.media.timestamp;
 
-  // Ignore seller audio during opener
-  if (!sellerAudioEnabled) {
+  // Ignore seller audio while the opener is being generated/played
+  if (callState === CALL_STATE.OPENING) {
     return;
   }
 
