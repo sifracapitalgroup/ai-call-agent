@@ -245,27 +245,30 @@ return [
 /** ElevenLabs stream-input: expressiveness presets (not semantic labels). */
 const ELEVEN_TONE_PRESETS = Object.freeze({
   neutral: {
-    stability: 0.45,
-    similarity_boost: 0.85,
-    style: 0.2,
-    use_speaker_boost: true,
-  },
-  confidence: {
-    stability: 0.55,
-    similarity_boost: 0.85,
-    style: 0.15,
-    use_speaker_boost: true,
-  },
-  understanding: {
-    stability: 0.35,
-    similarity_boost: 0.85,
+    stability: 0.42,
+    similarity_boost: 0.9,
     style: 0.28,
     use_speaker_boost: true,
   },
+
+  confidence: {
+    stability: 0.34,
+    similarity_boost: 0.92,
+    style: 0.58,
+    use_speaker_boost: true,
+  },
+
+  understanding: {
+    stability: 0.3,
+    similarity_boost: 0.9,
+    style: 0.52,
+    use_speaker_boost: true,
+  },
+
   emphasis: {
-    stability: 0.4,
-    similarity_boost: 0.85,
-    style: 0.35,
+    stability: 0.22,
+    similarity_boost: 0.94,
+    style: 0.82,
     use_speaker_boost: true,
   },
 });
