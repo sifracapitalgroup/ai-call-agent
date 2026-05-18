@@ -927,8 +927,6 @@ let firstTwilioAudio = false;
   let streamSid = null;
   let callSid = null;
   let latestMediaTimestamp = 0;
-  let responseStartTimestamp = null;
-  let lastAssistantItem = null;
   let fullCallTranscript = "";
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
@@ -1290,29 +1288,29 @@ openAiWs.send(JSON.stringify(sessionUpdate));
   }
 
 
-  /** @returns {boolean} whether playback was interrupted (Twilio clear / cancel already applied when true) */
-  function interruptAssistant() {
-    if (lastAssistantItem && responseStartTimestamp !== null) {
-      callState = CALL_STATE.INTERRUPTING;
+/** @returns {boolean} whether playback was interrupted */
+function interruptAssistant() {
 
-      const elapsedMs = latestMediaTimestamp - responseStartTimestamp;
+  callState = CALL_STATE.INTERRUPTING;
 
-      openAiWs.send(
-        JSON.stringify({
-          type: "conversation.item.truncate",
-          item_id: lastAssistantItem,
-          content_index: 0,
-          audio_end_ms: elapsedMs,
-        })
-      );
+  clearTwilioAudio();
 
-      clearTwilioAudio();
+  if (aiSpeechTimeout) {
+    clearTimeout(aiSpeechTimeout);
+    aiSpeechTimeout = null;
+  }
 
-      lastAssistantItem = null;
-      responseStartTimestamp = null;
-      return true;
-    }
+  aiSpeaking = false;
 
+  if (openAiWs.readyState === WebSocket.OPEN) {
+    openAiWs.send(JSON.stringify({
+      type: "response.cancel"
+    }));
+  }
+
+  return true;
+}
+  
     if (aiSpeaking) {
       callState = CALL_STATE.INTERRUPTING;
       clearTwilioAudio();
@@ -1483,29 +1481,6 @@ flush: true
     elevenBuffer = "";
   }
 
-}
-  
-    
-    if (event.type === "response.output_audio.delta") {
-
-  console.log("AUDIO DELTA RECEIVED");
-
-  if (event.item_id) {
-    lastAssistantItem = event.item_id;
-  }
-
-  if (
-    callState === CALL_STATE.LISTENING ||
-    callState === CALL_STATE.INTERRUPTING
-  ) {
-    callState = CALL_STATE.RESPONDING;
-  }
-
-  if (!responseStartTimestamp) {
-    responseStartTimestamp = latestMediaTimestamp;
-  }
-
-  forwardAssistantAudioToTwilio(event.delta);
 }
 
     if (event.type === "conversation.item.created") {
@@ -1748,7 +1723,6 @@ flush: true
     callState = CALL_STATE.LISTENING;
   }
 
-  responseStartTimestamp = null;
   lastAssistantItem = null;
 }
 
