@@ -1341,8 +1341,6 @@ elevenWs.on("message", (data) => {
   logTime("FIRST ELEVEN AUDIO RECEIVED");
 }
 
-      console.log("ELEVEN AUDIO RECEIVED");
-
       console.log("FORWARDING AUDIO TO TWILIO");
 
       if (!firstTwilioAudio) {
@@ -1399,7 +1397,6 @@ openAiWs.on("message", async (data) => {
     const event = JSON.parse(data.toString());
     
 if (
-  event.type === "response.text.delta" ||
   event.type === "response.output_text.delta"
 ) {
 
@@ -1411,8 +1408,6 @@ if (
   const delta = event.delta ?? "";
 
   elevenBuffer += delta;
-
-  console.log("AI TEXT DELTA:", delta);
 
   const shouldFlush =
     elevenBuffer.includes(".") ||
