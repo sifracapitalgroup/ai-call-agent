@@ -306,11 +306,19 @@ const EMPHASIS_TOPIC_WORDS = [
   "cash",
 ];
 
-function shapeTextForEleven(text) {
+/** Default voice for the whole call — set once on Eleven WS init only. */
+const ELEVEN_SESSION_VOICE_SETTINGS = ELEVEN_TONE_PRESETS.neutral;
+
+function shapeTextForEleven(text, tone = "neutral") {
   let t = String(text || "");
   t = t.replace(/\[\[(?:tone|mode):\s*[\w-]+\]\]/gi, "");
   t = t.replace(/\*\*([^*]+)\*\*/g, "$1");
   t = t.replace(/\s+/g, " ").trim();
+
+  if (tone === "understanding" && t && !/[.!?…]/.test(t.slice(-1))) {
+    t += ".";
+  }
+
   return t;
 }
 
@@ -1439,21 +1447,14 @@ function interruptAssistant() {
   function sendTextToEleven(ws, rawText, options = {}) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return null;
 
-    const shaped = shapeTextForEleven(rawText);
-    if (!shaped) return null;
-
     const tone =
       options.tone ||
-      inferElevenTone(callState, lastSellerTranscript, shaped);
-    const voiceSettings =
-      options.voiceSettings ||
-      ELEVEN_TONE_PRESETS[tone] ||
-      ELEVEN_TONE_PRESETS.neutral;
+      inferElevenTone(callState, lastSellerTranscript, rawText);
+    const shaped = shapeTextForEleven(rawText, tone);
+    if (!shaped) return null;
 
-    const payload = {
-      text: shaped,
-      voice_settings: voiceSettings,
-    };
+    // ElevenLabs: voice_settings only on the first WS message — never repeat or change.
+    const payload = { text: shaped };
 
     if (options.flush !== false) {
       payload.flush = true;
@@ -1547,10 +1548,7 @@ function interruptAssistant() {
     logTime(`DIRECT OPENER TTS (${source})`);
     console.log("DIRECT OPENER TO ELEVEN:", spokenLine);
 
-    sendTextToEleven(elevenWs, spokenLine, {
-      tone: "confidence",
-      flush: true,
-    });
+    sendTextToEleven(elevenWs, spokenLine, { flush: true });
 
     if (!firstTextToEleven) {
       firstTextToEleven = true;
@@ -1587,7 +1585,7 @@ function interruptAssistant() {
         ws.send(
           JSON.stringify({
             text: " ",
-            voice_settings: ELEVEN_TONE_PRESETS.confidence,
+            voice_settings: ELEVEN_SESSION_VOICE_SETTINGS,
             generation_config: {
               chunk_length_schedule: [50, 120, 160, 250],
             },
