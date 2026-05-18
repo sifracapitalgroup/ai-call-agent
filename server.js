@@ -931,7 +931,6 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
-  let elevenReadyForRealtime = false;
   /** Post-opener seller lines appended to fullTranscript for classification. */
   let sellerEngagedPostOpener = false;
   /** Any completed seller transcription (legacy sellerSpoke semantics for CRM). */
@@ -1315,23 +1314,20 @@ elevenWs = new WebSocket(
 );
 
 elevenWs.on("open", () => {
-
   console.log("Connected to ElevenLabs");
-
-  // FORCE REAL VOICE WARMUP
+  
   elevenWs.send(JSON.stringify({
-    text: "Hello",
-    flush: true,
-    voice_settings: {
-      stability: 0.45,
-      similarity_boost: 0.85,
-      style: 0.2,
-      use_speaker_boost: true
-    }
-  }));
+  text: ".",
+  voice_settings: {
+    stability: 0.45,
+    similarity_boost: 0.85,
+    style: 0.2,
+    use_speaker_boost: true
+  }
+}));
 });
 
-elevenWs.on("message", async (data) => {
+elevenWs.on("message", (data) => {
 
   try {
 
@@ -1339,26 +1335,6 @@ elevenWs.on("message", async (data) => {
 
 
     if (audioChunk.audio) {
-
-      if (!elevenReadyForRealtime) {
-
-  elevenReadyForRealtime = true;
-
-  console.log("ELEVEN FULLY READY");
-
-  await sendSessionUpdate();
-
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions: buildOpenerResponseCreateInstructions(openerSpeech),
-      },
-    })
-  );
-
-  return;
-}
 
       if (!firstElevenAudio) {
   firstElevenAudio = true;
@@ -1402,7 +1378,17 @@ elevenWs.on("close", (code, reason) => {
   );
 });
   
-  
+await sendSessionUpdate();
+
+openAiWs.send(
+  JSON.stringify({
+    type: "response.create",
+    response: {
+      instructions: buildOpenerResponseCreateInstructions(openerSpeech),
+    },
+  })
+);
+});
   
 let fullTranscript = ""; 
 
@@ -1713,7 +1699,6 @@ flush: true
     console.error("OpenAI message parse error:", err);
   }
 });
-  });
 
  twilioWs.on("message", async (raw) => {
     try {
