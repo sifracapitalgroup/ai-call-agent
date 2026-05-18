@@ -1401,7 +1401,6 @@ elevenWs.on("close", (code, reason) => {
     reason?.toString?.() || ""
   );
 });
-  });
   
   
   
@@ -1714,6 +1713,7 @@ flush: true
     console.error("OpenAI message parse error:", err);
   }
 });
+  });
 
  twilioWs.on("message", async (raw) => {
     try {
