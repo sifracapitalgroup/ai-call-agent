@@ -948,8 +948,6 @@ let firstTwilioAudio = false;
   /** Twilio often sends `start` after OpenAI already streams opener audio — buffer until `streamSid` exists. */
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
-  let openerResponseSent = false;
-  let openerFallbackTimer = null;
   let responseInProgress = false;
 
   const openAiWs = new WebSocket(
