@@ -931,7 +931,6 @@ let firstTwilioAudio = false;
   let lastAssistantItem = null;
   let fullCallTranscript = "";
   let callState = CALL_STATE.IDLE;
-  let assistantTextBuffer = "";
   let elevenWs = null;
   let elevenBuffer = "";
   let aiSpeaking = false;
@@ -1453,8 +1452,6 @@ if (
   }
 
   const delta = event.delta ?? "";
-
-  assistantTextBuffer += delta;
 
   elevenBuffer += delta;
 
