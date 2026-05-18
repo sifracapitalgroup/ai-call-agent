@@ -1219,10 +1219,7 @@ Mention the property address naturally if helpful.
   },
 },
 },
-};
-
-openAiWs.send(JSON.stringify(sessionUpdate));
-   
+};   
    
   openAiWs.send(JSON.stringify(sessionUpdate));
 }
@@ -1310,23 +1307,6 @@ function interruptAssistant() {
 
   return true;
 }
-  
-    if (aiSpeaking) {
-      callState = CALL_STATE.INTERRUPTING;
-      clearTwilioAudio();
-      if (aiSpeechTimeout) {
-        clearTimeout(aiSpeechTimeout);
-        aiSpeechTimeout = null;
-      }
-      aiSpeaking = false;
-      if (openAiWs.readyState === WebSocket.OPEN) {
-        openAiWs.send(JSON.stringify({ type: "response.cancel" }));
-      }
-      return true;
-    }
-
-    return false;
-  }
 
 openAiWs.on("open", async () => {
   console.log("Connected to OpenAI Realtime");
@@ -1722,10 +1702,8 @@ flush: true
   ) {
     callState = CALL_STATE.LISTENING;
   }
-
-  lastAssistantItem = null;
 }
-
+    
     if (event.type === "error") {
       
         responseInProgress = false;
