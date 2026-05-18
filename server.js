@@ -1299,10 +1299,6 @@ openAiWs.send(JSON.stringify(sessionUpdate));
 
     openerResponseSent = true;
 
-    if (openerFallbackTimer) {
-      clearTimeout(openerFallbackTimer);
-      openerFallbackTimer = null;
-    }
 
     console.log("OPENER response.create →", source);
 
@@ -1452,14 +1448,18 @@ elevenWs.on("close", (code, reason) => {
   );
 });
   
-  await sendSessionUpdate();
+ await sendSessionUpdate();
 
-  openerFallbackTimer = setTimeout(() => {
-    openerFallbackTimer = null;
-    sendOpenerResponseOnce("fallback_opener");
-  }, 1600);
-  });
-
+openAiWs.send(
+  JSON.stringify({
+    type: "response.create",
+    response: {
+      instructions: buildOpenerResponseCreateInstructions(openerSpeech),
+    },
+  })
+);
+});
+  
 let fullTranscript = ""; 
 
 openAiWs.on("message", async (data) => {
@@ -1859,10 +1859,6 @@ setTimeout(() => {
 
   openerInProgress = false;
 
-  if (openerFallbackTimer) {
-    clearTimeout(openerFallbackTimer);
-    openerFallbackTimer = null;
-  }
 
   const wrongNumberAlreadyHandled =
     callState === CALL_STATE.WRONG_NUMBER;
@@ -1958,11 +1954,6 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   twilioWs.on("close", () => {
     console.log("Twilio websocket closed");
 
-    if (openerFallbackTimer) {
-      clearTimeout(openerFallbackTimer);
-      openerFallbackTimer = null;
-    }
-
     openerInProgress = false;
 
     if (openAiWs.readyState === WebSocket.OPEN) {
@@ -1976,11 +1967,6 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
 
   openAiWs.on("close", () => {
     console.log("OpenAI websocket closed");
-
-    if (openerFallbackTimer) {
-      clearTimeout(openerFallbackTimer);
-      openerFallbackTimer = null;
-    }
 
     openerInProgress = false;
   });
