@@ -1165,7 +1165,6 @@ function scheduleEndCall(reason) {
 }
 
  async function sendSessionUpdate() {
-  const openerBlock = buildOutboundOpenerInstructionBlock(openerSpeech);
 
   const leadContext = `
 CURRENT LEAD CONTEXT:
@@ -1200,10 +1199,6 @@ Mention the property address naturally if helpful.
   output_modalities: ["text"],
 
   instructions:
-    openerBlock +
-    `
-
-` +
     SYSTEM_PROMPT +
     `
 ` +
