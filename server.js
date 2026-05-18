@@ -1401,6 +1401,8 @@ elevenWs.on("close", (code, reason) => {
     reason?.toString?.() || ""
   );
 });
+  });
+  
   
   
 let fullTranscript = ""; 
