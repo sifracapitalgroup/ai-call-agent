@@ -1407,6 +1407,21 @@ if (
 
   const delta = event.delta ?? "";
 
+if (callState === CALL_STATE.OPENING) {
+
+  if (
+    elevenWs &&
+    elevenWs.readyState === WebSocket.OPEN
+  ) {
+
+    elevenWs.send(JSON.stringify({
+      text: delta
+    }));
+  }
+
+  return;
+}
+  
   elevenBuffer += delta;
 
   const shouldFlush =
