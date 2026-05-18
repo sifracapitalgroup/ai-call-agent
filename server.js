@@ -1400,7 +1400,7 @@ elevenWs.on("open", () => {
   console.log("Connected to ElevenLabs");
   
   elevenWs.send(JSON.stringify({
-  text: " ",
+  text: ".",
   voice_settings: {
     stability: 0.45,
     similarity_boost: 0.85,
@@ -1476,10 +1476,6 @@ elevenWs.on("close", (code, reason) => {
 });
   
   await sendSessionUpdate();
-
-  setTimeout(() => {
-    sendOpenerResponseOnce("post_session_update_tick");
-  }, 200);
 
   openerFallbackTimer = setTimeout(() => {
     openerFallbackTimer = null;
