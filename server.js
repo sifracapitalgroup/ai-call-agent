@@ -1734,7 +1734,6 @@ flush: true
 
       console.log("OPENER ACTUALLY FINISHED → LISTENING");
     }
-  }
 
   const text = JSON.stringify(event);
 
