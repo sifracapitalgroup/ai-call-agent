@@ -1469,12 +1469,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     console.log("MACHINE PHRASE DETECTED");
   }
-
-  if (transcript.length > 200) {
-
-    machineScore += 1;
-  }
-
+  
   console.log("MACHINE SCORE:", machineScore);
 
   if (machineScore >= 3) {
