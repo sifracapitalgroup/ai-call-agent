@@ -1795,7 +1795,7 @@ flush: true
         setTimeout(() => {
           sellerAudioEnabled = true;
           console.log("SELLER AUDIO ENABLED");
-        }, 8250);
+        }, 6500);
 
         logTime("TWILIO STREAM START (streamSid ready)");
         console.log("Twilio stream started:", {
