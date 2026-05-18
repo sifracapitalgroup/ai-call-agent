@@ -1293,28 +1293,6 @@ openAiWs.send(JSON.stringify(sessionUpdate));
     pendingTwilioMediaPayloads.push(delta);
   }
 
-  function sendOpenerResponseOnce(source) {
-    if (openerResponseSent) return;
-    if (openAiWs.readyState !== WebSocket.OPEN) return;
-
-    openerResponseSent = true;
-
-
-    console.log("OPENER response.create →", source);
-
-    openerInProgress = true;
-
-    logTime("RESPONSE.CREATE SENT");
-    openAiWs.send(
-      JSON.stringify({
-        
-        type: "response.create",
-        response: {
-          instructions: buildOpenerResponseCreateInstructions(openerSpeech),
-        },
-      })
-    );
-  }
 
   /** @returns {boolean} whether playback was interrupted (Twilio clear / cancel already applied when true) */
   function interruptAssistant() {
