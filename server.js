@@ -24,6 +24,13 @@ let currentCallLead = {};
 let callNotesBySid = {};
 /** Twilio recording webhooks often omit `To`/`Called`; map parent CallSid → dialed E.164. */
 const callSidToLeadPhone = new Map();
+/** Elapsed-ms prefix for call-scoped logs (reset on each /start-call). */
+let callStartTime = null;
+
+function logTime(...args) {
+  const elapsed = callStartTime != null ? Date.now() - callStartTime : 0;
+  console.log(`[${elapsed}ms]`, ...args);
+}
 
 function buildGhlContactsUpsertUrl(identifier) {
   const trimmed = String(identifier || "").trim();
@@ -706,7 +713,7 @@ const outcomeTag = TAG_BY_OUTCOME[outcome];
     });
 
     const data = await response.json();
-    console.log("GHL UPDATED:", data);
+    logTime("GHL UPDATED:", data);
   } catch (err) {
     console.error("GHL UPDATE ERROR:", err);
   }
@@ -733,10 +740,10 @@ app.all("/voice", (req, res) => {
   const answeredByRaw = req.body.AnsweredBy || req.query.AnsweredBy || "";
   const answeredBy = String(answeredByRaw).toLowerCase();
 
-  console.log("VOICE ANSWERED BY:", answeredBy);
+  logTime("VOICE ANSWERED BY:", answeredBy);
 
   if (isTwilioAmdMachineOrFax(answeredByRaw)) {
-    console.log("VOICEMAIL DETECTED BEFORE AI");
+    logTime("VOICEMAIL DETECTED BEFORE AI");
 
     const phone = resolveOutboundLeadPhone(req);
 
@@ -760,7 +767,7 @@ app.all("/voice", (req, res) => {
   const wsUrl =
     publicBaseUrl.replace(/^http/i, "ws") + "/media-stream";
 
-  console.log("VOICE HIT:", wsUrl);
+  logTime("VOICE HIT:", wsUrl);
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -774,7 +781,7 @@ app.all("/voice", (req, res) => {
 
 app.post("/call-status", async (req, res) => {
   try {
-    console.log("CALL STATUS:", req.body);
+    logTime("CALL STATUS:", req.body);
 
     const callStatus = req.body.CallStatus;
     const callDuration = Number(req.body.Duration || req.body.CallDuration || 0);
@@ -786,16 +793,16 @@ app.post("/call-status", async (req, res) => {
     const answeredByRaw = req.body.AnsweredBy || "";
     const amdVoicemail = isTwilioAmdMachineOrFax(answeredByRaw);
 
-    console.log("PHONE FROM TWILIO:", phone);
-    console.log("CALL DURATION USED:", callDuration);
-    console.log("CALL STATUS ANSWERED BY:", answeredByRaw);
+    logTime("PHONE FROM TWILIO:", phone);
+    logTime("CALL DURATION USED:", callDuration);
+    logTime("CALL STATUS ANSWERED BY:", answeredByRaw);
 
     if (
       callStatus === "no-answer" ||
       callStatus === "busy" ||
       callStatus === "failed"
     ) {
-      console.log("TRIGGERING GHL UPDATE FOR NO ANSWER");
+      logTime("TRIGGERING GHL UPDATE FOR NO ANSWER");
 
       await updateGHL(
         "no_answer_voicemail",
@@ -803,7 +810,7 @@ app.post("/call-status", async (req, res) => {
         phone
       );
     } else if (amdVoicemail && callStatus === "completed") {
-      console.log("TRIGGERING GHL UPDATE FOR AMD VOICEMAIL (COMPLETED)");
+      logTime("TRIGGERING GHL UPDATE FOR AMD VOICEMAIL (COMPLETED)");
 
       await syncTwilioAmdNoAnswerToGhl(
         req.body.CallSid,
@@ -825,10 +832,10 @@ app.post("/amd-status", async (req, res) => {
     const answeredByRaw = req.body.AnsweredBy || "";
     const callSid = req.body.CallSid;
 
-    console.log("AMD STATUS:", req.body);
+    logTime("AMD STATUS:", req.body);
 
     if (callSid && isTwilioAmdMachineOrFax(answeredByRaw)) {
-      console.log("ASYNC AMD VOICEMAIL — ending call:", callSid);
+      logTime("ASYNC AMD VOICEMAIL — ending call:", callSid);
 
       const phone = resolveOutboundLeadPhone(req);
 
@@ -865,9 +872,9 @@ app.post("/recording", async (req, res) => {
       req.body.From ||
       currentCallLead.phone;
 
-    console.log("Recording ready:", recordingUrl);
-    console.log("Call SID:", callSid);
-    console.log("PHONE:", phone);
+    logTime("Recording ready:", recordingUrl);
+    logTime("Call SID:", callSid);
+    logTime("PHONE:", phone);
 
     const upsertUrl = buildGhlContactsUpsertUrl(phone);
     if (!upsertUrl) {
@@ -903,7 +910,7 @@ app.post("/recording", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("GHL RECORDING UPDATE:", JSON.stringify(data, null, 2));
+    logTime("GHL RECORDING UPDATE:", JSON.stringify(data, null, 2));
 
     res.sendStatus(200);
   } catch (err) {
@@ -916,8 +923,9 @@ app.post("/recording", async (req, res) => {
 
 app.post("/start-call", async (req, res) => {
   try {
+    callStartTime = Date.now();
 
-    console.log( "RAW GHL BODY:", JSON.stringify(req.body, null, 2) );
+    logTime("RAW GHL BODY:", JSON.stringify(req.body, null, 2));
     
     const body = req.body || {};
 
@@ -999,7 +1007,7 @@ const call_notes =
       call_notes: call_notes || "",
     };
 
-    console.log("GHL WEBHOOK HIT:", currentCallLead);
+    logTime("GHL WEBHOOK HIT:", currentCallLead);
 
     if (!cleanPhone) {
       return res.status(400).json({
@@ -1031,7 +1039,7 @@ const call_notes =
 
     callSidToLeadPhone.set(call.sid, cleanPhone);
 
-    console.log("OUTBOUND CALL STARTED:", call.sid);
+    logTime("OUTBOUND CALL STARTED:", call.sid);
 
     res.status(200).json({
       success: true,
@@ -1052,17 +1060,14 @@ const call_notes =
 
 
 wss.on("connection", (twilioWs) => {
-  console.log("Twilio websocket connected");
+  if (callStartTime == null) {
+    callStartTime = Date.now();
+  }
+
+  logTime("Twilio websocket connected");
 
   const openerSpeech = buildOpenerSpeechContext(currentCallLead);
-  console.log("SPOKEN OPENER CONTEXT:", openerSpeech);
-
-  const callStartTime = Date.now();
-
-function logTime(label) {
-  const elapsed = Date.now() - callStartTime;
-  console.log(`[${elapsed}ms] ${label}`);
-}
+  logTime("SPOKEN OPENER CONTEXT:", openerSpeech);
 
 let firstDeltaReceived = false;
 let firstTextToEleven = false;
@@ -1286,12 +1291,12 @@ function scheduleEndCall(reason) {
     callState = CALL_STATE.ENDING;
   }
 
-  console.log("AUTO ENDING CALL:", reason);
+  logTime("AUTO ENDING CALL:", reason);
 
   setTimeout(async () => {
     try {
       if (callSid) {
-        console.log("FORCE END CALL:", callSid);
+        logTime("FORCE END CALL:", callSid);
 
         await twilioClient.calls(callSid).update({
   status: "completed"
@@ -1327,7 +1332,7 @@ Do NOT read every detail out loud.
 Mention the property address naturally if helpful.
 `;
 
-  console.log("CALL LEAD LOADED FROM GHL:", currentCallLead);
+  logTime("CALL LEAD LOADED FROM GHL:", currentCallLead);
 
    logTime("SESSION.UPDATE SENT");
  const sessionUpdate = {
@@ -1385,7 +1390,7 @@ Mention the property address naturally if helpful.
   function flushPendingAssistantAudioToTwilio() {
     if (!streamSid || pendingTwilioMediaPayloads.length === 0) return;
 
-    console.log(
+    logTime(
       `TWILIO FLUSH: replaying ${pendingTwilioMediaPayloads.length} buffered assistant audio frame(s)`
     );
 
@@ -1416,7 +1421,7 @@ Mention the property address naturally if helpful.
     }
 
     if (pendingTwilioMediaPayloads.length === 0) {
-      console.log(
+      logTime(
         "TWILIO BUFFER: assistant audio arrived before stream start — buffering until streamSid"
       );
     }
@@ -1499,7 +1504,7 @@ function interruptAssistant() {
     });
 
     ws.on("close", (code, reason) => {
-      console.log(
+      logTime(
         "ElevenLabs websocket closed",
         "code:",
         code,
@@ -1520,7 +1525,6 @@ function interruptAssistant() {
 
       callState = CALL_STATE.LISTENING;
       logTime("DIRECT OPENER PLAYBACK DONE → LISTENING");
-      console.log("OPENER PLAYBACK FINISHED → LISTENING");
     }, 1200);
   }
 
@@ -1549,7 +1553,7 @@ function interruptAssistant() {
     const spokenLine = buildOpenerSpokenLine(openerSpeech);
 
     logTime(`DIRECT OPENER TTS (${source})`);
-    console.log("DIRECT OPENER TO ELEVEN:", spokenLine);
+    logTime("DIRECT OPENER TO ELEVEN:", spokenLine);
 
     sendTextToEleven(elevenWs, spokenLine, { flush: true });
 
@@ -1565,7 +1569,6 @@ function interruptAssistant() {
       if (callState === CALL_STATE.OPENING) {
         callState = CALL_STATE.LISTENING;
         logTime("OPENER MAX DURATION FALLBACK → LISTENING");
-        console.log("OPENER MAX DURATION FALLBACK → LISTENING");
       }
     }, 15000);
   }
@@ -1582,7 +1585,6 @@ function interruptAssistant() {
       );
 
       ws.on("open", () => {
-        console.log("Connected to ElevenLabs");
         logTime("ELEVENLABS WS OPEN");
 
         ws.send(
@@ -1603,7 +1605,6 @@ function interruptAssistant() {
   }
 
 openAiWs.on("open", async () => {
-  console.log("Connected to OpenAI Realtime");
   logTime("OPENAI WS OPEN");
   callState = CALL_STATE.OPENING;
 
@@ -1663,7 +1664,7 @@ if (
 
     const sent = sendTextToEleven(elevenWs, elevenBuffer, { flush: true });
     if (sent) {
-      console.log("SENT TO ELEVEN:", sent.shaped, `(tone: ${sent.tone})`);
+      logTime("SENT TO ELEVEN:", sent.shaped, `(tone: ${sent.tone})`);
     }
 
     elevenBuffer = "";
@@ -1678,7 +1679,7 @@ if (
         const userText = item.content?.[0]?.transcript?.trim();
 
         if (userText) {
-          console.log("USER SAID:", userText);
+          logTime("USER SAID:", userText);
           fullCallTranscript += `USER: ${userText}\n`;
         }
       }
@@ -1698,14 +1699,14 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
     machineScore += 3;
 
-    console.log("MACHINE PHRASE DETECTED");
+    logTime("MACHINE PHRASE DETECTED");
   }
   
-  console.log("MACHINE SCORE:", machineScore);
+  logTime("MACHINE SCORE:", machineScore);
 
   if (machineScore >= 3) {
 
-    console.log("VOICEMAIL / IVR DETECTED");
+    logTime("VOICEMAIL / IVR DETECTED");
 
     callState = CALL_STATE.VOICEMAIL;
 
@@ -1726,7 +1727,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
   status: "completed"
 });
 
-      console.log("VOICEMAIL CALL ENDED");
+      logTime("VOICEMAIL CALL ENDED");
 
     } catch (err) {
 
@@ -1739,7 +1740,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
   // rest of your existing logic below
 
-console.log("SELLER SAID:", transcript);
+logTime("SELLER SAID:", transcript);
 
 
 
@@ -1764,7 +1765,7 @@ console.log("SELLER SAID:", transcript);
   );
 
   if (isWrongNumber) {
-    console.log("WRONG NUMBER DETECTED");
+    logTime("WRONG NUMBER DETECTED");
 
     callState = CALL_STATE.WRONG_NUMBER;
     fullTranscript += `\nWRONG NUMBER: ${transcript}`;
@@ -1793,7 +1794,7 @@ console.log("SELLER SAID:", transcript);
     callState === CALL_STATE.INTERRUPTING;
 
   if (!realtimeConversation) {
-    console.log("SELLER SPEECH DURING OPENER — deferred until LISTENING");
+    logTime("SELLER SPEECH DURING OPENER — deferred until LISTENING");
     fullCallTranscript += `SELLER (during opener): ${transcript}\n`;
     return;
   }
@@ -1808,14 +1809,14 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 
     // user starts speaking → stop any current playback (realtime mode only)
     if (event.type === "input_audio_buffer.speech_started") {
-      console.log("Possible user speech detected");
+      logTime("Possible user speech detected");
 
       const canInterrupt =
         callState === CALL_STATE.LISTENING ||
         callState === CALL_STATE.RESPONDING;
 
       if (!canInterrupt) {
-        console.log("Ignoring speech_started during opener/startup");
+        logTime("Ignoring speech_started during opener/startup");
         return;
       }
 
@@ -1859,7 +1860,7 @@ if (responseInProgress) {
 
 responseInProgress = true;
 
-console.log("SPEECH STOPPED → response.create (manual reply turn)");
+logTime("SPEECH STOPPED → response.create (manual reply turn)");
 
 openAiWs.send(
   JSON.stringify({
@@ -1882,7 +1883,7 @@ openAiWs.send(
 
     const finalSent = sendTextToEleven(elevenWs, elevenBuffer, { flush: true });
     if (finalSent) {
-      console.log(
+      logTime(
         "FINAL ELEVEN FLUSH:",
         finalSent.shaped,
         `(tone: ${finalSent.tone})`
@@ -1931,11 +1932,10 @@ openAiWs.send(
 
         setTimeout(() => {
           sellerAudioEnabled = true;
-          console.log("SELLER AUDIO ENABLED");
+          logTime("SELLER AUDIO ENABLED");
         }, 6500);
 
-        logTime("TWILIO STREAM START (streamSid ready)");
-        console.log("Twilio stream started:", {
+        logTime("TWILIO STREAM START (streamSid ready)", {
           streamSid,
           callSid,
         });
@@ -1969,7 +1969,7 @@ openAiWs.send(
 }
 
      if (msg.event === "stop") {
-  console.log("Twilio stream stopped:", {
+  logTime("Twilio stream stopped:", {
     streamSid,
     callSid,
   });
@@ -2030,11 +2030,11 @@ ${fullCallTranscript}
       endedAt: new Date().toISOString(),
     };
 
-    console.log("CALL SUMMARY:", summary);
+    logTime("CALL SUMMARY:", summary);
   }
 
 if (wrongNumberAlreadyHandled) {
-  console.log("Skipping final classification because wrong number was already detected.");
+  logTime("Skipping final classification because wrong number was already detected.");
 } else if (!sellerUtteranceDetected) {
 updateGHL(
   "no_answer_voicemail",
@@ -2066,7 +2066,7 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   });
 
   twilioWs.on("close", () => {
-    console.log("Twilio websocket closed");
+    logTime("Twilio websocket closed");
 
     if (openAiWs.readyState === WebSocket.OPEN) {
       openAiWs.close();
@@ -2078,7 +2078,7 @@ updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
   });
 
   openAiWs.on("close", () => {
-    console.log("OpenAI websocket closed");
+    logTime("OpenAI websocket closed");
 
   });
 
