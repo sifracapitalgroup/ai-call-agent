@@ -989,7 +989,7 @@ app.post("/recording", async (req, res) => {
   }
 });
 
-app.post("/start-dialer", async (req, res) => {
+app.all("/start-dialer", async (req, res) => {
   const body = req.body || {};
   const phone = String(body.phone || "").trim();
 
@@ -1013,41 +1013,10 @@ app.post("/start-dialer", async (req, res) => {
   });
 });
 
-app.post("/stop-dialer", async (req, res) => {
+app.all("/stop-dialer", async (req, res) => {
   dialerRunning = false;
   res.json({ success: true, message: "Dialer will stop after current call" });
 });
-
-async function moveOpportunityToAiCallQueued(opportunityId) {
-  if (!opportunityId) {
-    console.log("No opportunity_id provided. Skipping stage move.");
-    return;
-  }
-
-  const response = await fetch(
-    `https://services.leadconnectorhq.com/opportunities/${opportunityId}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-        Version: "2021-07-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        pipelineId: process.env.GHL_PIPELINE_ID,
-        pipelineStageName: "AI Call Queued",
-        status: "open",
-      }),
-    }
-  );
-
-  const data = await response.json().catch(() => ({}));
-  console.log("MOVE TO AI CALL QUEUED RESPONSE:", data);
-
-  if (!response.ok) {
-    throw new Error(`Failed to move opportunity: ${JSON.stringify(data)}`);
-  }
-}
 
 async function startNextQueuedLead() {
   if (!dialerRunning) return;
@@ -1062,17 +1031,16 @@ async function startNextQueuedLead() {
   }
 
   const phone = String(nextLead.phone || "").trim();
-  if (phone) queuedPhones.delete(phone);
+
+  if (phone) {
+    queuedPhones.delete(phone);
+  }
 
   activeCall = true;
 
-  console.log("Moving queued lead to AI Call Queued:", phone);
+  console.log("Starting next queued lead:", phone);
 
-await moveOpportunityToAiCallQueued(nextLead.opportunity_id);
-
-console.log("Starting next queued lead:", phone);
-
-await startCallFromLead(nextLead);
+  await startCallFromLead(nextLead);
 }
 
 async function startCallFromLead(body) {
