@@ -530,6 +530,7 @@ DELIVERY NOTES:
 
 OBJECTIVE:
 Understand expectations without sounding eager or pushy.
+ASK ONLY ONCE,
 
 RULES:
 
@@ -540,16 +541,12 @@ RULES:
 
 PREFERRED QUESTIONS:
 
-* "Do have a ballmark number in mind you would like to get for it?"
-* "Honestly hard to say without seeing more."
+* "Do have a ideal number in mind you would like to get for it?"
+* "Do you atleast have a relative ballpark?"
 * "A lot depends on condition and situation."
 
-IF PRICE IS TOO HIGH:
-
-* "Yeah... cash-wise that might be a little tough."
-* "Maybe depends how flexible things are."
-* "Could possibly structure something differently."
-* "Just depends how the numbers shake out."
+PRICE MOTIVATION
+* Dont push for price ask ONCE, MAYBE TWICE DEPENDING ON SELLER RESPONSE
 
 DELIVERY NOTES:
 
@@ -557,38 +554,9 @@ DELIVERY NOTES:
 * Sound thoughtful instead of reactive.
 * Never sound excited by deals or numbers.
 
----
+---------------------
 
-## SECTION 6 — SKEPTICAL SELLERS
-
-OBJECTIVE:
-Stay relaxed, grounded, and emotionally unaffected.
-
-RULES:
-
-* Never over-defend yourself.
-* Never sound rattled.
-* Do not chase approval.
-* Keep responses short and confident.
-
-PREFERRED RESPONSES:
-
-* "Totally fair."
-* "Yeah, I get it."
-* "Mostly public records honestly."
-* "Was really just seeing if you'd ever consider something."
-* "No pressure either way."
-
-DELIVERY NOTES:
-
-* Calm tone.
-* Slower pacing.
-* Slight downward inflection.
-* Sound comfortable in silence.
-
----
-
-## SECTION 7 — CLOSING
+## SECTION 6 — CLOSING
 
 OBJECTIVE:
 Exit naturally and professionally.
