@@ -287,30 +287,30 @@ return [
 /** ElevenLabs stream-input: expressiveness presets (not semantic labels). */
 const ELEVEN_TONE_PRESETS = Object.freeze({
   neutral: {
-    stability: 0.42,
-    similarity_boost: 0.9,
-    style: 0.28,
+    stability: 0.58,
+    similarity_boost: 0.88,
+    style: 0.12,
     use_speaker_boost: true,
   },
 
   confidence: {
-    stability: 0.26,
-    similarity_boost: 0.94,
-    style: 0.78,
+    stability: 0.54,
+    similarity_boost: 0.9,
+    style: 0.18,
     use_speaker_boost: true,
   },
 
   understanding: {
-    stability: 0.3,
-    similarity_boost: 0.9,
-    style: 0.52,
+    stability: 0.62,
+    similarity_boost: 0.86,
+    style: 0.10,
     use_speaker_boost: true,
   },
 
   emphasis: {
-    stability: 0.22,
-    similarity_boost: 0.94,
-    style: 0.82,
+    stability: 0.5,
+    similarity_boost: 0.9,
+    style: 0.22,
     use_speaker_boost: true,
   },
 });
@@ -1629,7 +1629,7 @@ function interruptAssistant() {
   function connectElevenLabs() {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(
-        `wss://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream-input?output_format=ulaw_8000&model_id=eleven_flash_v2_5`,
+        `wss://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream-input?output_format=ulaw_8000&model_id=eleven_turbo_v2_5`,
         {
           headers: {
             "xi-api-key": process.env.ELEVENLABS_API_KEY,
@@ -1645,7 +1645,7 @@ function interruptAssistant() {
             text: " ",
             voice_settings: ELEVEN_SESSION_VOICE_SETTINGS,
             generation_config: {
-              chunk_length_schedule: [50, 120, 160, 250],
+              chunk_length_schedule: [120, 160, 220, 290],
             },
           })
         );
