@@ -487,7 +487,7 @@ RULES:
 
 PREFERRED QUESTIONS:
 
-* "Quick question — just making sure I have it right... it's a (bed/bath), around (sq ft) square feet?"
+* "Quick question — just making sure I have it right... it's about (sq ft) square feet?"
 
 IF SELLER IS VAGUE:
 
