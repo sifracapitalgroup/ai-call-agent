@@ -27,7 +27,22 @@ let dialerRunning = false;
 let activeCall = false;
 let activeCallSid = null;
 
+/** Tear down OpenAI/Eleven/Twilio sockets for the active media-stream connection. */
+let endActiveMediaSession = null;
+
+function requestEndActiveMediaSession(reason) {
+  if (typeof endActiveMediaSession === "function") {
+    try {
+      endActiveMediaSession(reason);
+    } catch (err) {
+      console.error("END MEDIA SESSION ERROR:", err);
+    }
+  }
+}
+
 function finishQueueCall() {
+  if (!activeCall) return;
+
   activeCall = false;
   activeCallSid = null;
 
@@ -794,6 +809,9 @@ const outcomeTag = TAG_BY_OUTCOME[outcome];
 /** Dedupe GHL "no answer" from AMD: both `/voice` and `completed` status may fire. */
 const twilioAmdNoAnswerGhlSyncedCallSids = new Set();
 
+/** Dedupe GHL + queue advance when `/call-status` already handled a terminal leg. */
+const callSidTerminalStatusHandled = new Set();
+
 async function syncTwilioAmdNoAnswerToGhl(callSid, answeredByRaw, phone, detailSuffix) {
   if (callSid && twilioAmdNoAnswerGhlSyncedCallSids.has(callSid)) {
     return;
@@ -869,6 +887,8 @@ app.post("/call-status", async (req, res) => {
     logTime("CALL DURATION USED:", callDuration);
     logTime("CALL STATUS ANSWERED BY:", answeredByRaw);
 
+    const statusCallSid = req.body.CallSid;
+
     if (
       callStatus === "no-answer" ||
       callStatus === "busy" ||
@@ -876,20 +896,37 @@ app.post("/call-status", async (req, res) => {
     ) {
       logTime("TRIGGERING GHL UPDATE FOR NO ANSWER");
 
+      if (statusCallSid) {
+        callSidTerminalStatusHandled.add(statusCallSid);
+      }
+
       await updateGHL(
         "no_answer_voicemail",
         `Call ended with status: ${callStatus} and duration ${callDuration} seconds.`,
         phone
       );
-    } else if (amdVoicemail && callStatus === "completed") {
-      logTime("TRIGGERING GHL UPDATE FOR AMD VOICEMAIL (COMPLETED)");
 
-      await syncTwilioAmdNoAnswerToGhl(
-        req.body.CallSid,
-        answeredByRaw,
-        phone,
-        `Call completed; duration ${callDuration}s.`
-      );
+      requestEndActiveMediaSession(`call-status:${callStatus}`);
+      finishQueueCall();
+    } else if (callStatus === "completed") {
+      if (amdVoicemail) {
+        logTime("TRIGGERING GHL UPDATE FOR AMD VOICEMAIL (COMPLETED)");
+
+        if (statusCallSid) {
+          callSidTerminalStatusHandled.add(statusCallSid);
+        }
+
+        await syncTwilioAmdNoAnswerToGhl(
+          req.body.CallSid,
+          answeredByRaw,
+          phone,
+          `Call completed; duration ${callDuration}s.`
+        );
+
+        finishQueueCall();
+      }
+
+      requestEndActiveMediaSession("call-status:completed");
     }
 
     res.sendStatus(200);
@@ -921,6 +958,8 @@ app.post("/amd-status", async (req, res) => {
       });
 
       await twilioClient.calls(callSid).update({ status: "completed" });
+      requestEndActiveMediaSession("amd-status");
+      finishQueueCall();
     }
 
     res.sendStatus(200);
@@ -1014,6 +1053,18 @@ app.all("/stop-dialer", async (req, res) => {
   dialerRunning = false;
 
   console.log("Dialer paused.");
+
+  requestEndActiveMediaSession("stop-dialer");
+
+  if (activeCallSid) {
+    try {
+      await twilioClient.calls(activeCallSid).update({ status: "completed" });
+    } catch (err) {
+      console.error("STOP DIALER HANGUP ERROR:", err);
+    }
+  }
+
+  finishQueueCall();
 
   res.json({
     success: true,
@@ -1304,6 +1355,8 @@ app.post("/start-call", async (req, res) => {
 });
 
 wss.on("connection", (twilioWs) => {
+  requestEndActiveMediaSession("new-media-stream");
+
   if (callStartTime == null) {
     callStartTime = Date.now();
   }
@@ -1325,6 +1378,45 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenKeepAlive = null;
+  let mediaSessionEnded = false;
+
+  function teardownMediaSession(reason) {
+    if (mediaSessionEnded) return;
+    mediaSessionEnded = true;
+
+    if (endActiveMediaSession === teardownMediaSession) {
+      endActiveMediaSession = null;
+    }
+
+    clearInterval(elevenKeepAlive);
+    elevenKeepAlive = null;
+
+    if (openerPlaybackEndTimer) {
+      clearTimeout(openerPlaybackEndTimer);
+      openerPlaybackEndTimer = null;
+    }
+
+    if (assistantPlaybackTimer) {
+      clearTimeout(assistantPlaybackTimer);
+      assistantPlaybackTimer = null;
+    }
+
+    if (elevenWs?.readyState === WebSocket.OPEN) {
+      elevenWs.close();
+    }
+
+    if (openAiWs?.readyState === WebSocket.OPEN) {
+      openAiWs.close();
+    }
+
+    if (twilioWs?.readyState === WebSocket.OPEN) {
+      twilioWs.close();
+    }
+
+    logTime("Media session torn down:", reason);
+  }
+
+  endActiveMediaSession = teardownMediaSession;
 
 function startElevenKeepAlive(ws) {
   clearInterval(elevenKeepAlive);
@@ -2300,8 +2392,7 @@ openAiWs.send(
     callState === CALL_STATE.WRONG_NUMBER;
 
   callState = CALL_STATE.ENDED;
-
-
+  teardownMediaSession("stream-stop");
 
   if (callSid) {
     const summaryPrompt = `
@@ -2355,8 +2446,16 @@ ${fullCallTranscript}
     logTime("CALL SUMMARY:", summary);
   }
 
+const terminalStatusAlreadyHandled =
+  callSid && callSidTerminalStatusHandled.has(callSid);
+
 if (wrongNumberAlreadyHandled) {
   logTime("Skipping final classification because wrong number was already detected.");
+  finishQueueCall();
+} else if (terminalStatusAlreadyHandled) {
+  logTime(
+    "Skipping stream-stop GHL update — terminal call-status already handled."
+  );
   finishQueueCall();
 } else if (!sellerUtteranceDetected) {
   updateGHL(
@@ -2380,11 +2479,6 @@ if (wrongNumberAlreadyHandled) {
   });
 }
 
-
-  if (openAiWs.readyState === WebSocket.OPEN) {
-    openAiWs.close();
-  }
-
   return;
 }
   } catch (err) {
@@ -2394,10 +2488,7 @@ if (wrongNumberAlreadyHandled) {
 
   twilioWs.on("close", () => {
     logTime("Twilio websocket closed");
-
-    if (openAiWs.readyState === WebSocket.OPEN) {
-      openAiWs.close();
-    }
+    teardownMediaSession("twilio-ws-close");
   });
 
   twilioWs.on("error", (err) => {
