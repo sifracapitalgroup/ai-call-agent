@@ -1362,7 +1362,7 @@ Mention the property address naturally if helpful.
       type: "server_vad",
       threshold: 0.85,
       prefix_padding_ms: 700,
-      silence_duration_ms: 1000,
+      silence_duration_ms: 575,
       create_response: false,
       interrupt_response: true,
     },
