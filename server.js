@@ -1045,74 +1045,67 @@ async function startCallFromLead(body) {
     callStartTime = Date.now();
     lastWordEmitTime = null;
 
-    logTime("RAW GHL BODY:", JSON.stringify(body, null, 2));
-    
     body = body || {};
 
-const first_name = body.first_name || body.firstName || "";
-const last_name = body.last_name || body.lastName || "";
-const full_name = body.full_name || body.fullName || body.name || "";
-const phone = body.phone || "";
+    logTime("RAW GHL BODY:", JSON.stringify(body, null, 2));
 
-const property_address =
-  body.property_address ||
-  body.propertyAddress ||
-  body["Property Address"] ||
-  body.address ||
-  body.streetAddress ||
-  "";
+    const first_name = body.first_name || body.firstName || "";
+    const last_name = body.last_name || body.lastName || "";
+    const full_name = body.full_name || body.fullName || body.name || "";
+    const phone = body.phone || "";
 
-const city = body.city || "";
-const state = body.state || "";
-const postal_code = body.postal_code || body.postalCode || body.zip || "";
+    const property_address =
+      body.property_address ||
+      body.propertyAddress ||
+      body["Property Address"] ||
+      body.address ||
+      body.streetAddress ||
+      "";
 
-const bed = body.bed || body.beds || body["Bed"] || "";
-const bath = body.bath || body.baths || body["Bath"] || "";
-const sq_ft = body.sq_ft || body.sqFt || body["Sq Ft"] || "";
+    const city = body.city || "";
+    const state = body.state || "";
+    const postal_code = body.postal_code || body.postalCode || body.zip || "";
 
-const estimated_value =
-  body.estimated_value ||
-  body.estimatedValue ||
-  body["Estimated Value"] ||
-  "";
+    const bed = body.bed || body.beds || body["Bed"] || "";
+    const bath = body.bath || body.baths || body["Bath"] || "";
+    const sq_ft = body.sq_ft || body.sqFt || body["Sq Ft"] || "";
 
-const year_built =
-  body.year_built ||
-  body.yearBuilt ||
-  body["Year Built"] ||
-  "";
+    const estimated_value =
+      body.estimated_value ||
+      body.estimatedValue ||
+      body["Estimated Value"] ||
+      "";
 
-const sale_price =
-  body.sale_price ||
-  body.salePrice ||
-  body["Sale Price"] ||
-  "";
+    const year_built =
+      body.year_built ||
+      body.yearBuilt ||
+      body["Year Built"] ||
+      "";
 
-const last_sold =
-  body.last_sold ||
-  body.lastSold ||
-  body["Last Sold"] ||
-  "";
+    const sale_price =
+      body.sale_price ||
+      body.salePrice ||
+      body["Sale Price"] ||
+      "";
 
-const call_notes =
-  body.call_notes ||
-  body.callNotes ||
-  "";
+    const last_sold =
+      body.last_sold ||
+      body.lastSold ||
+      body["Last Sold"] ||
+      "";
+
+    const call_notes = body.call_notes || body.callNotes || "";
 
     const cleanPhone = String(phone || "").trim();
 
     currentCallLead = {
       first_name:
-  first_name ||
-  full_name?.split(" ")[0] ||
-  "there",
+        first_name ||
+        full_name?.split(" ")[0] ||
+        "there",
       last_name: last_name || "",
       phone: cleanPhone,
-      address:
-  property_address ||
-  req.body["Property Address"] ||
-  streetAddress ||
-  "your property",
+      address: property_address || "your property",
       city: city || "",
       state: state || "",
       postal_code: postal_code || "",
@@ -1129,44 +1122,44 @@ const call_notes =
     logTime("GHL WEBHOOK HIT:", currentCallLead);
 
     if (!cleanPhone) {
-  throw new Error("Missing phone number");
-}
+      throw new Error("Missing phone number");
+    }
 
-    const publicBaseUrl =
-  process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
+
+    if (!publicBaseUrl) {
+      throw new Error("Missing PUBLIC_BASE_URL");
+    }
 
     const call = await twilioClient.calls.create({
-  to: cleanPhone,
-  from: process.env.TWILIO_PHONE_NUMBER,
-  url: `${publicBaseUrl}/voice`,
-      // Sync AMD blocks TwiML (and Media Stream) for ~4–10s after answer — use async.
+      to: cleanPhone,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      url: `${publicBaseUrl}/voice`,
       machineDetection: "Enable",
       asyncAmd: true,
       asyncAmdStatusCallback: `${publicBaseUrl}/amd-status`,
       asyncAmdStatusCallbackMethod: "POST",
-  statusCallback: `${publicBaseUrl}/call-status`,
-  statusCallbackEvent: ["completed", "no-answer", "busy",  "failed"],
-  record: true,
-  recordingChannels: "dual",
-  recordingStatusCallback: `${publicBaseUrl}/recording`,
-  recordingStatusCallbackEvent: ["completed"],
-});
+      statusCallback: `${publicBaseUrl}/call-status`,
+      statusCallbackEvent: ["completed", "no-answer", "busy", "failed"],
+      record: true,
+      recordingChannels: "dual",
+      recordingStatusCallback: `${publicBaseUrl}/recording`,
+      recordingStatusCallbackEvent: ["completed"],
+    });
 
     callSidToLeadPhone.set(call.sid, cleanPhone);
-    activeCall = true;
-activeCallSid = call.sid;
+    activeCallSid = call.sid;
 
     logTime("OUTBOUND CALL STARTED:", call.sid);
 
-    activeCallSid = call.sid;
-return call;
+    return call;
   } catch (err) {
+    activeCall = false;
+    activeCallSid = null;
     console.error("START CALL ERROR:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
+    throw err;
   }
+}
 
 app.post("/start-call", async (req, res) => {
   try {
