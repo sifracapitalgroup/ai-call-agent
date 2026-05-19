@@ -211,7 +211,7 @@ function buildOpenerSpeechContext(lead) {
 
 /** Mandatory first lines (session + response.create). Server fills name/location only. */
 function buildFixedOutboundOpenerScript(ctx) {
-  const hi = `Hi ${ctx.sellerName}...?`;
+  const hi = `Hey ${ctx.sellerName}...?`;
   const ask = `This is Daniel... Would you be open to selling your property on ${ctx.locationClause}?`;
   return { hi, ask };
 }
