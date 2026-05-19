@@ -181,6 +181,7 @@ return address
 .replace(/\bS\b/gi, "South")
 .replace(/\bE\b/gi, "East")
 .replace(/\bW\b/gi, "West")
+
 .replace(/\bDr\b/gi, "Drive")
 .replace(/\bRd\b/gi, "Road")
 .replace(/\bSt\b/gi, "Street")
@@ -189,7 +190,13 @@ return address
 .replace(/\bLn\b/gi, "Lane")
 .replace(/\bCt\b/gi, "Court")
 .replace(/\bPl\b/gi, "Place")
-.replace(/\bTer\b/gi, "Terrace");
+.replace(/\bTer\b/gi, "Terrace")
+
+.replace(/\bApt\b/gi, "Apartment")
+.replace(/\bSte\b/gi, "Suite")
+.replace(/\bUnit\b/gi, "Unit")
+.replace(/\bFl\b/gi, "Floor")
+.replace(/\bBldg\b/gi, "Building");
 }
 
 
