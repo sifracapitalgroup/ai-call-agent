@@ -32,6 +32,41 @@ function logTime(...args) {
   console.log(`[${elapsed}ms]`, ...args);
 }
 
+let lastWordEmitTime = null;
+
+function trackWord(word) {
+  const w = String(word ?? "").trim();
+  if (!w) return;
+  const now = Date.now();
+  const elapsed = callStartTime != null ? now - callStartTime : 0;
+  const sincePrev = lastWordEmitTime != null ? now - lastWordEmitTime : 0;
+  lastWordEmitTime = now;
+  console.log(`[${elapsed}ms] WORD: ${w} (+${sincePrev}ms)`);
+}
+
+function createWordDeltaTracker() {
+  let buffer = "";
+  return {
+    feed(delta) {
+      if (!delta) return;
+      buffer += delta;
+      let match;
+      while ((match = buffer.match(/^(\S+)\s+/))) {
+        trackWord(match[1]);
+        buffer = buffer.slice(match[0].length);
+      }
+    },
+    flush() {
+      const tail = buffer.trim();
+      if (tail) trackWord(tail);
+      buffer = "";
+    },
+    reset() {
+      buffer = "";
+    },
+  };
+}
+
 function buildGhlContactsUpsertUrl(identifier) {
   const trimmed = String(identifier || "").trim();
   if (!trimmed) return null;
@@ -946,6 +981,7 @@ app.post("/recording", async (req, res) => {
 app.post("/start-call", async (req, res) => {
   try {
     callStartTime = Date.now();
+    lastWordEmitTime = null;
 
     logTime("RAW GHL BODY:", JSON.stringify(req.body, null, 2));
     
@@ -1103,6 +1139,7 @@ let firstTwilioAudio = false;
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
   let elevenBuffer = "";
+  const wordTelemetry = createWordDeltaTracker();
   let lastSellerTranscript = "";
   let directOpenerPlayed = false;
   let openerPlaybackEndTimer = null;
@@ -1496,6 +1533,7 @@ function interruptAssistant() {
 
   callState = CALL_STATE.INTERRUPTING;
   elevenBuffer = "";
+  wordTelemetry.reset();
   assistantPlaybackUntil = 0;
 
   if (assistantPlaybackTimer) {
@@ -1709,6 +1747,8 @@ if (
   }
 
   const delta = event.delta ?? "";
+
+  wordTelemetry.feed(delta);
 
   if (callState === CALL_STATE.OPENING) {
     return;
@@ -1946,6 +1986,7 @@ openAiWs.send(
    if (event.type === "response.done") {
 
   responseInProgress = false;
+  wordTelemetry.flush();
 
   if (
     elevenBuffer &&
