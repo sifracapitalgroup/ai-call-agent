@@ -332,6 +332,24 @@ function shapeTextForEleven(text, tone = "neutral") {
   return t;
 }
 
+function normalizeApostrophes(text) {
+  return String(text || "")
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u2033]/g, '"');
+}
+
+/**
+ * Mid-response TTS flush: stream statements early, but never split on "?".
+ * Multiple Eleven flushes on "?" caused back-to-back questions in one turn.
+ */
+function shouldFlushElevenBuffer(buffer, { forceFinal = false } = {}) {
+  const text = String(buffer || "");
+  if (!text.trim()) return false;
+  if (forceFinal) return true;
+  if (text.length >= 220) return true;
+  return /[.!](?:\s|$)/.test(text);
+}
+
 function inferElevenTone(callState, lastSellerLine, assistantText) {
   const seller = String(lastSellerLine || "").toLowerCase();
   const assistant = String(assistantText || "").toLowerCase();
@@ -375,7 +393,8 @@ TONE + DELIVERY
 
 * Match the seller’s energy
 * Slow down if seller shares something meaningful
-* Never stack questions
+* Never stack questions — at most ONE question per reply, and only ONE "?" in spoken output
+* When closing or saying goodbye, do NOT ask a new discovery question in the same reply
 * Keep the conversation natural and conversational
 * Listen carefully before responding
 * Do not paraphrase every seller response
@@ -449,6 +468,8 @@ Example:
 
 “Sounds like you’re probably not looking right now.”
 
+Pick ONE line (do not chain both):
+
 “If someone came in with the right number though…
 you’d at least take a look, right?”
 
@@ -519,7 +540,7 @@ Examples:
 
 “If everything made sense - how soon would you want to move on it?”
 
-If unclear:
+If unclear, pick ONE (never both in the same reply):
 
 “Are you thinking more like 30 days… or more a couple months?”
 
@@ -561,6 +582,7 @@ Goal:
 
 * exit naturally
 * preserve follow-up opportunity
+* one short line only — no new timeline or price questions in the same reply as goodbye
 
 Examples:
 
@@ -1095,6 +1117,9 @@ let firstTwilioAudio = false;
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
   let responseInProgress = false;
+  /** Block new seller turns until estimated assistant audio finishes. */
+  let assistantPlaybackUntil = 0;
+  let assistantPlaybackTimer = null;
 
   const openAiWs = new WebSocket(
   "wss://api.openai.com/v1/realtime?model=gpt-realtime-2",
@@ -1106,7 +1131,7 @@ let firstTwilioAudio = false;
 );
 
  function shouldEndCall(text) {
-  const t = String(text || "").toLowerCase();
+  const t = normalizeApostrophes(text).toLowerCase();
 
   const hardGoodbye =
     t.includes("have a good one") ||
@@ -1116,9 +1141,12 @@ let firstTwilioAudio = false;
     t.includes("bye");
 
   const clearClose =
-    t.includes("i’ll give you a call back") ||
-    t.includes("i’ll follow up with you") ||
-    t.includes("i’ll circle back with you");
+    t.includes("i'll give you a call back") ||
+    t.includes("i'll follow up with you") ||
+    t.includes("i'll circle back with you") ||
+    t.includes("ill give you a call back") ||
+    t.includes("ill follow up with you") ||
+    t.includes("ill circle back with you");
 
   return hardGoodbye || clearClose;
 }
@@ -1406,8 +1434,36 @@ Mention the property address naturally if helpful.
     }
   }
 
+  function extendAssistantPlaybackEstimate(base64Payload) {
+    if (!base64Payload) return;
+
+    const bytes = Buffer.from(base64Payload, "base64").length;
+    const durationMs = Math.ceil((bytes / 8000) * 1000) + 250;
+    assistantPlaybackUntil = Math.max(
+      assistantPlaybackUntil,
+      Date.now() + durationMs
+    );
+
+    if (assistantPlaybackTimer) {
+      clearTimeout(assistantPlaybackTimer);
+    }
+
+    assistantPlaybackTimer = setTimeout(() => {
+      assistantPlaybackTimer = null;
+      if (
+        callState === CALL_STATE.RESPONDING &&
+        Date.now() >= assistantPlaybackUntil
+      ) {
+        callState = CALL_STATE.LISTENING;
+        logTime("ASSISTANT PLAYBACK DONE → LISTENING");
+      }
+    }, durationMs + 50);
+  }
+
   function forwardAssistantAudioToTwilio(delta) {
     if (!delta) return;
+
+    extendAssistantPlaybackEstimate(delta);
 
     if (streamSid) {
       twilioWs.send(
@@ -1439,6 +1495,13 @@ Mention the property address naturally if helpful.
 function interruptAssistant() {
 
   callState = CALL_STATE.INTERRUPTING;
+  elevenBuffer = "";
+  assistantPlaybackUntil = 0;
+
+  if (assistantPlaybackTimer) {
+    clearTimeout(assistantPlaybackTimer);
+    assistantPlaybackTimer = null;
+  }
 
   clearTwilioAudio();
 
@@ -1469,6 +1532,14 @@ function interruptAssistant() {
     }
 
     ws.send(JSON.stringify(payload));
+
+    if (
+      callState === CALL_STATE.LISTENING ||
+      callState === CALL_STATE.INTERRUPTING
+    ) {
+      callState = CALL_STATE.RESPONDING;
+    }
+
     return { shaped, tone };
   }
 
@@ -1645,11 +1716,7 @@ if (
 
   elevenBuffer += delta;
 
-  const shouldFlush =
-    elevenBuffer.includes(".") ||
-    elevenBuffer.includes("?") ||
-    elevenBuffer.includes("!") ||
-    elevenBuffer.length > 120;
+  const shouldFlush = shouldFlushElevenBuffer(elevenBuffer);
 
   if (
     shouldFlush &&
@@ -1858,6 +1925,11 @@ if (responseInProgress) {
   return;
 }
 
+if (Date.now() < assistantPlaybackUntil) {
+  logTime("SPEECH STOPPED ignored — assistant still playing");
+  return;
+}
+
 responseInProgress = true;
 
 logTime("SPEECH STOPPED → response.create (manual reply turn)");
@@ -1881,7 +1953,9 @@ openAiWs.send(
     elevenWs.readyState === WebSocket.OPEN
   ) {
 
-    const finalSent = sendTextToEleven(elevenWs, elevenBuffer, { flush: true });
+    const finalSent = sendTextToEleven(elevenWs, elevenBuffer, {
+      flush: true,
+    });
     if (finalSent) {
       logTime(
         "FINAL ELEVEN FLUSH:",
@@ -1893,16 +1967,17 @@ openAiWs.send(
     elevenBuffer = "";
   }
 
-  const text = JSON.stringify(event);
+  const assistantText =
+    event.response?.output
+      ?.flatMap((item) => item.content || [])
+      ?.map((part) => part.text || "")
+      .join(" ") || JSON.stringify(event);
 
-  if (shouldEndCall(text)) {
-    scheduleEndCall(text);
+  if (shouldEndCall(assistantText)) {
+    scheduleEndCall(assistantText);
   }
 
-  if (
-    callState === CALL_STATE.RESPONDING ||
-    callState === CALL_STATE.INTERRUPTING
-  ) {
+  if (callState === CALL_STATE.INTERRUPTING) {
     callState = CALL_STATE.LISTENING;
   }
 }
