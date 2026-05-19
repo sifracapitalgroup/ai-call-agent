@@ -27,21 +27,70 @@ let dialerRunning = false;
 let activeCall = false;
 let activeCallSid = null;
 
-/** Tear down OpenAI/Eleven/Twilio sockets for the active media-stream connection. */
+/** Tear down OpenAI/Eleven/Twilio sockets keyed by Twilio CallSid. */
+const mediaSessionsByCallSid = new Map();
 let endActiveMediaSession = null;
+let placingOutboundCall = false;
+let dialerKickTimer = null;
 
-function requestEndActiveMediaSession(reason) {
+function requestEndMediaSession(callSid, reason) {
+  const teardown = callSid && mediaSessionsByCallSid.get(callSid);
+  if (!teardown) return false;
+
+  mediaSessionsByCallSid.delete(callSid);
+  try {
+    teardown(reason);
+  } catch (err) {
+    console.error("END MEDIA SESSION ERROR:", err);
+  }
+  return true;
+}
+
+function requestEndAllMediaSessions(reason) {
+  for (const [sid, teardown] of [...mediaSessionsByCallSid.entries()]) {
+    try {
+      teardown(`${reason}:${sid}`);
+    } catch (err) {
+      console.error("END MEDIA SESSION ERROR:", err);
+    }
+  }
+  mediaSessionsByCallSid.clear();
+
   if (typeof endActiveMediaSession === "function") {
     try {
       endActiveMediaSession(reason);
     } catch (err) {
       console.error("END MEDIA SESSION ERROR:", err);
     }
+    endActiveMediaSession = null;
   }
 }
 
-function finishQueueCall() {
+function requestEndActiveMediaSession(reason, callSid) {
+  if (callSid && requestEndMediaSession(callSid, reason)) return;
+
+  if (typeof endActiveMediaSession === "function") {
+    try {
+      endActiveMediaSession(reason);
+    } catch (err) {
+      console.error("END MEDIA SESSION ERROR:", err);
+    }
+    endActiveMediaSession = null;
+  }
+}
+
+function finishQueueCall(forCallSid) {
   if (!activeCall) return;
+
+  if (forCallSid && activeCallSid && forCallSid !== activeCallSid) {
+    logTime(
+      "Ignoring finishQueueCall for non-active CallSid:",
+      forCallSid,
+      "active:",
+      activeCallSid
+    );
+    return;
+  }
 
   activeCall = false;
   activeCallSid = null;
@@ -906,8 +955,8 @@ app.post("/call-status", async (req, res) => {
         phone
       );
 
-      requestEndActiveMediaSession(`call-status:${callStatus}`);
-      finishQueueCall();
+      requestEndActiveMediaSession(`call-status:${callStatus}`, statusCallSid);
+      finishQueueCall(statusCallSid);
     } else if (callStatus === "completed") {
       if (amdVoicemail) {
         logTime("TRIGGERING GHL UPDATE FOR AMD VOICEMAIL (COMPLETED)");
@@ -923,10 +972,10 @@ app.post("/call-status", async (req, res) => {
           `Call completed; duration ${callDuration}s.`
         );
 
-        finishQueueCall();
+        finishQueueCall(statusCallSid);
       }
 
-      requestEndActiveMediaSession("call-status:completed");
+      requestEndActiveMediaSession("call-status:completed", statusCallSid);
     }
 
     res.sendStatus(200);
@@ -958,8 +1007,8 @@ app.post("/amd-status", async (req, res) => {
       });
 
       await twilioClient.calls(callSid).update({ status: "completed" });
-      requestEndActiveMediaSession("amd-status");
-      finishQueueCall();
+      requestEndActiveMediaSession("amd-status", callSid);
+      finishQueueCall(callSid);
     }
 
     res.sendStatus(200);
@@ -1037,7 +1086,11 @@ app.all("/start-dialer", async (req, res) => {
 
   if (!activeCall) {
     console.log("Dialer started/restarted. Kicking queue.");
-    setTimeout(startNextQueuedLead, 1000);
+    if (dialerKickTimer) clearTimeout(dialerKickTimer);
+    dialerKickTimer = setTimeout(() => {
+      dialerKickTimer = null;
+      startNextQueuedLead();
+    }, 1000);
   } else {
     console.log("Dialer running. Current call still active.");
   }
@@ -1054,17 +1107,22 @@ app.all("/stop-dialer", async (req, res) => {
 
   console.log("Dialer paused.");
 
-  requestEndActiveMediaSession("stop-dialer");
+  const hangupSids = new Set([
+    ...mediaSessionsByCallSid.keys(),
+    ...(activeCallSid ? [activeCallSid] : []),
+  ]);
 
-  if (activeCallSid) {
+  requestEndAllMediaSessions("stop-dialer");
+
+  for (const sid of hangupSids) {
     try {
-      await twilioClient.calls(activeCallSid).update({ status: "completed" });
+      await twilioClient.calls(sid).update({ status: "completed" });
     } catch (err) {
-      console.error("STOP DIALER HANGUP ERROR:", err);
+      console.error("STOP DIALER HANGUP ERROR:", sid, err);
     }
   }
 
-  finishQueueCall();
+  finishQueueCall(activeCallSid);
 
   res.json({
     success: true,
@@ -1152,7 +1210,9 @@ async function getContactById(contactId) {
 
 async function startNextQueuedLead() {
   if (!dialerRunning) return;
-  if (activeCall) return;
+  if (activeCall || placingOutboundCall) return;
+
+  activeCall = true;
 
   try {
     const nextOpp = await getNextOpportunityFromStage("New Lead");
@@ -1160,6 +1220,7 @@ async function startNextQueuedLead() {
     if (!nextOpp) {
       console.log("No queued GHL opportunities left. Dialer stopped.");
       dialerRunning = false;
+      activeCall = false;
       return;
     }
 
@@ -1187,8 +1248,6 @@ async function startNextQueuedLead() {
         "",
     };
 
-    activeCall = true;
-
     console.log("Starting next GHL queued lead:", nextLead.phone);
 
     await startCallFromLead(nextLead);
@@ -1203,6 +1262,12 @@ async function startNextQueuedLead() {
 }
 
 async function startCallFromLead(body) {
+  if (placingOutboundCall) {
+    throw new Error("Outbound call already being placed");
+  }
+
+  placingOutboundCall = true;
+
   try {
     callStartTime = Date.now();
     lastWordEmitTime = null;
@@ -1320,6 +1385,8 @@ async function startCallFromLead(body) {
     activeCallSid = null;
     console.error("START CALL ERROR:", err);
     throw err;
+  } finally {
+    placingOutboundCall = false;
   }
 }
 
@@ -1355,7 +1422,14 @@ app.post("/start-call", async (req, res) => {
 });
 
 wss.on("connection", (twilioWs) => {
-  requestEndActiveMediaSession("new-media-stream");
+  if (mediaSessionsByCallSid.size > 0) {
+    logTime(
+      "Duplicate media stream blocked — tearing down",
+      mediaSessionsByCallSid.size,
+      "existing session(s)"
+    );
+    requestEndAllMediaSessions("duplicate-media-stream");
+  }
 
   if (callStartTime == null) {
     callStartTime = Date.now();
@@ -1383,6 +1457,10 @@ let firstTwilioAudio = false;
   function teardownMediaSession(reason) {
     if (mediaSessionEnded) return;
     mediaSessionEnded = true;
+
+    if (callSid) {
+      mediaSessionsByCallSid.delete(callSid);
+    }
 
     if (endActiveMediaSession === teardownMediaSession) {
       endActiveMediaSession = null;
@@ -2342,6 +2420,10 @@ openAiWs.send(
         streamSid = msg.start.streamSid;
         callSid = msg.start.callSid;
 
+        mediaSessionsByCallSid.set(callSid, teardownMediaSession);
+        endActiveMediaSession = teardownMediaSession;
+        logTime("Media session registered for CallSid:", callSid);
+
         sellerAudioEnabled = false;
 
         setTimeout(() => {
@@ -2451,31 +2533,31 @@ const terminalStatusAlreadyHandled =
 
 if (wrongNumberAlreadyHandled) {
   logTime("Skipping final classification because wrong number was already detected.");
-  finishQueueCall();
+  finishQueueCall(callSid);
 } else if (terminalStatusAlreadyHandled) {
   logTime(
     "Skipping stream-stop GHL update — terminal call-status already handled."
   );
-  finishQueueCall();
+  finishQueueCall(callSid);
 } else if (!sellerUtteranceDetected) {
   updateGHL(
     "no_answer_voicemail",
     "No answer or voicemail reached. No meaningful seller response.",
     currentCallLead.phone
-  ).finally(finishQueueCall);
+  ).finally(() => finishQueueCall(callSid));
 } else if (!fullTranscript || fullTranscript.length < 10) {
   updateGHL(
     "follow_up",
     "Seller answered but hung up before a full conversation.",
     currentCallLead.phone
-  ).finally(finishQueueCall);
+  ).finally(() => finishQueueCall(callSid));
 } else {
   classifyCall(fullTranscript).then((result) => {
     updateGHL(
       result.ai_call_outcome,
       result.call_summary,
       currentCallLead.phone
-    ).finally(finishQueueCall);
+    ).finally(() => finishQueueCall(callSid));
   });
 }
 
