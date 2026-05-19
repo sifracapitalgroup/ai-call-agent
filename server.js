@@ -466,7 +466,7 @@ IF SELLER IS VAGUE:
 
 DELIVERY NOTES:
 
-* Slow down slightly before key words like "updated", "original", "major work".
+* Slow down slightly before key words like "million dollar", "full gut", "major work".
 * Add subtle conversational pauses naturally.
 * Avoid sounding overly sharp or robotic.
 
@@ -488,7 +488,7 @@ LOOK FOR:
 
 RULES:
 
-* One question at a time.
+* NEVER HAVE BACK TO BACK QUESTION -> QUESTION ALWAYS PROCEED TO NEXT SECTION
 * Keep transitions extremely casual.
 * Do not abruptly switch topics.
 * Slightly soften direct occupancy questions.
@@ -499,7 +499,7 @@ PREFERRED QUESTIONS:
 
 DELIVERY NOTES:
 
-* Add slight emphasis to words like "living", "vacant", "currently".
+* Add slight emphasis to words like "living", "currently".
 * Keep tone calm and curious — never transactional.
 
 ---
