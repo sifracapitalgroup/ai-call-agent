@@ -1094,9 +1094,7 @@ async function startNextQueuedLead() {
   if (activeCall) return;
 
   try {
-    const nextOpp =
-      (await getNextOpportunityFromStage("AI Retry Queue")) ||
-      (await getNextOpportunityFromStage("New Lead"));
+    const nextOpp = await getNextOpportunityFromStage("New Lead");
 
     if (!nextOpp) {
       console.log("No queued GHL opportunities left. Dialer stopped.");
