@@ -517,9 +517,7 @@ RULES:
 
 PREFERRED QUESTIONS:
 
-* "You thinking sometime soon... or more down the road?"
-* "Mainly exploring options right now?"
-* "No rush either way — just trying to get a feel for it."
+* "If it all made sense... What's your ideal timeframe to close"
 
 DELIVERY NOTES:
 
@@ -542,8 +540,7 @@ RULES:
 
 PREFERRED QUESTIONS:
 
-* "What were you thinking you'd want for it?"
-* "Did you have a ballpark in mind?"
+* "Do have a ballmark number in mind you would like to get for it?"
 * "Honestly hard to say without seeing more."
 * "A lot depends on condition and situation."
 
