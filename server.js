@@ -1080,6 +1080,21 @@ let firstTwilioAudio = false;
   let fullCallTranscript = "";
   let callState = CALL_STATE.IDLE;
   let elevenWs = null;
+  let elevenKeepAlive = null;
+
+function startElevenKeepAlive(ws) {
+  clearInterval(elevenKeepAlive);
+
+  elevenKeepAlive = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        text: " ",
+      }));
+
+      logTime("ELEVEN KEEPALIVE");
+    }
+  }, 12000);
+}
   let elevenBuffer = "";
   const wordTelemetry = createWordDeltaTracker();
   let lastSellerTranscript = "";
@@ -1560,7 +1575,10 @@ function interruptAssistant() {
     });
 
     ws.on("close", (code, reason) => {
+      clearInterval(elevenKeepAlive);
+      
       logTime(
+        
         "ElevenLabs websocket closed",
         "code:",
         code,
@@ -1665,6 +1683,8 @@ openAiWs.on("open", async () => {
   try {
     elevenWs = await connectElevenLabs();
     attachElevenLabsHandlers(elevenWs);
+    startElevenKeepAlive(elevenWs);
+    
   } catch (err) {
     console.error("ElevenLabs connection failed:", err);
     return;
