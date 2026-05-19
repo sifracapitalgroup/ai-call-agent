@@ -1042,7 +1042,6 @@ async function moveOpportunityToAiCallQueued(opportunityId) {
   );
 
   const data = await response.json().catch(() => ({}));
-
   console.log("MOVE TO AI CALL QUEUED RESPONSE:", data);
 
   if (!response.ok) {
@@ -1067,7 +1066,7 @@ async function startNextQueuedLead() {
 
   activeCall = true;
 
-console.log("Moving queued lead to AI Call Queued:", phone);
+  console.log("Moving queued lead to AI Call Queued:", phone);
 
 await moveOpportunityToAiCallQueued(nextLead.opportunity_id);
 
