@@ -27,9 +27,6 @@ let dialerRunning = false;
 let activeCall = false;
 let activeCallSid = null;
 
-const leadQueue = [];
-const queuedPhones = new Set();
-
 function finishQueueCall() {
   activeCall = false;
   activeCallSid = null;
@@ -997,15 +994,6 @@ app.post("/recording", async (req, res) => {
 });
 
 app.all("/start-dialer", async (req, res) => {
-  const body = req.body || {};
-  const phone = String(body.phone || "").trim();
-
-  if (phone && !queuedPhones.has(phone)) {
-    leadQueue.push(body);
-    queuedPhones.add(phone);
-    console.log("Lead added to dialer queue:", phone);
-  }
-
   if (!dialerRunning) {
     dialerRunning = true;
     console.log("Dialer started.");
@@ -1014,8 +1002,7 @@ app.all("/start-dialer", async (req, res) => {
 
   res.json({
     success: true,
-    message: "Lead queued / dialer running",
-    queueLength: leadQueue.length,
+    message: "Dialer running",
     activeCall,
   });
 });
@@ -1025,29 +1012,135 @@ app.all("/stop-dialer", async (req, res) => {
   res.json({ success: true, message: "Dialer will stop after current call" });
 });
 
+let pipelineCache = null;
+
+async function ghlRequest(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+      Version: "2021-07-28",
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(`GHL API error ${response.status}: ${JSON.stringify(data)}`);
+  }
+
+  return data;
+}
+
+async function getPipelineStages() {
+  if (pipelineCache) return pipelineCache;
+
+  const url = new URL("https://services.leadconnectorhq.com/opportunities/pipelines");
+  url.searchParams.set("locationId", process.env.GHL_LOCATION_ID);
+
+  const data = await ghlRequest(url.toString(), { method: "GET" });
+
+  const pipelines = data.pipelines || [];
+  const pipeline = pipelines.find(p => p.id === process.env.GHL_PIPELINE_ID);
+
+  if (!pipeline) {
+    throw new Error("Pipeline not found. Check GHL_PIPELINE_ID.");
+  }
+
+  pipelineCache = pipeline.stages || [];
+  return pipelineCache;
+}
+
+async function getStageIdByName(stageName) {
+  const stages = await getPipelineStages();
+
+  const stage = stages.find(
+    s => String(s.name || "").trim().toLowerCase() === stageName.toLowerCase()
+  );
+
+  if (!stage) {
+    throw new Error(`Stage not found: ${stageName}`);
+  }
+
+  return stage.id;
+}
+
+async function getNextOpportunityFromStage(stageName) {
+  const stageId = await getStageIdByName(stageName);
+
+  const url = new URL("https://services.leadconnectorhq.com/opportunities/search");
+  url.searchParams.set("location_id", process.env.GHL_LOCATION_ID);
+  url.searchParams.set("pipeline_id", process.env.GHL_PIPELINE_ID);
+  url.searchParams.set("pipeline_stage_id", stageId);
+  url.searchParams.set("status", "open");
+  url.searchParams.set("limit", "1");
+
+  const data = await ghlRequest(url.toString(), { method: "GET" });
+
+  return data.opportunities?.[0] || null;
+}
+
+async function getContactById(contactId) {
+  return ghlRequest(
+    `https://services.leadconnectorhq.com/contacts/${contactId}`,
+    { method: "GET" }
+  );
+}
+
 async function startNextQueuedLead() {
   if (!dialerRunning) return;
   if (activeCall) return;
 
-  const nextLead = leadQueue.shift();
+  try {
+    const nextOpp =
+      (await getNextOpportunityFromStage("AI Retry Queue")) ||
+      (await getNextOpportunityFromStage("New Lead"));
 
-  if (!nextLead) {
-    console.log("No queued leads left. Dialer stopped.");
-    dialerRunning = false;
-    return;
+    if (!nextOpp) {
+      console.log("No queued GHL opportunities left. Dialer stopped.");
+      dialerRunning = false;
+      return;
+    }
+
+    const contactId = nextOpp.contactId || nextOpp.contact?.id;
+
+    if (!contactId) {
+      throw new Error("Opportunity has no contactId.");
+    }
+
+    const contactData = await getContactById(contactId);
+    const contact = contactData.contact || contactData;
+
+    const nextLead = {
+      first_name: contact.firstName || contact.first_name || "",
+      last_name: contact.lastName || contact.last_name || "",
+      full_name: contact.name || contact.fullName || "",
+      phone: contact.phone || "",
+      city: contact.city || "",
+      state: contact.state || "",
+      postal_code: contact.postalCode || contact.postal_code || "",
+      property_address:
+        contact.customFields?.property_address ||
+        contact.property_address ||
+        contact.address1 ||
+        "",
+    };
+
+    activeCall = true;
+
+    console.log("Starting next GHL queued lead:", nextLead.phone);
+
+    await startCallFromLead(nextLead);
+  } catch (err) {
+    console.error("GHL QUEUE ERROR:", err);
+    activeCall = false;
+
+    if (dialerRunning) {
+      setTimeout(startNextQueuedLead, 5000);
+    }
   }
-
-  const phone = String(nextLead.phone || "").trim();
-
-  if (phone) {
-    queuedPhones.delete(phone);
-  }
-
-  activeCall = true;
-
-  console.log("Starting next queued lead:", phone);
-
-  await startCallFromLead(nextLead);
 }
 
 async function startCallFromLead(body) {
