@@ -1993,7 +1993,7 @@ openAiWs.send(
         setTimeout(() => {
           sellerAudioEnabled = true;
           logTime("SELLER AUDIO ENABLED");
-        }, 6500);
+        }, 9500);
 
         logTime("TWILIO STREAM START (streamSid ready)", {
           streamSid,
