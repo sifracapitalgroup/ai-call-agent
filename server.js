@@ -234,6 +234,123 @@ const US_STATE_BY_ABBREV = Object.freeze({
   WY: "Wyoming",
 });
 
+/** GHL GET contacts return customFields as [{ id, value }]; upserts use { key, field_value }. */
+function readGhlCustomFieldEntryValue(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  const val =
+    entry.value ?? entry.field_value ?? entry.fieldValue ?? entry.stringValue ?? "";
+  return String(val).trim();
+}
+
+function resolveGhlCustomFieldFromList(customFields, { fieldKey, fieldId } = {}) {
+  if (!Array.isArray(customFields)) return "";
+
+  const keyNorm = fieldKey ? String(fieldKey).trim().toLowerCase() : "";
+  const idNorm = fieldId ? String(fieldId).trim() : "";
+
+  for (const entry of customFields) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const entryId = String(entry.id || entry.fieldId || "").trim();
+    const entryKey = String(
+      entry.key || entry.name || entry.fieldKey || entry.field_key || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (idNorm && entryId === idNorm) {
+      return readGhlCustomFieldEntryValue(entry);
+    }
+    if (keyNorm && entryKey === keyNorm) {
+      return readGhlCustomFieldEntryValue(entry);
+    }
+  }
+
+  return "";
+}
+
+/** Best-effort when field id/key is unknown — first value that looks like a street address. */
+function guessPropertyAddressFromGhlCustomFields(customFields) {
+  if (!Array.isArray(customFields)) return "";
+
+  for (const entry of customFields) {
+    const val = readGhlCustomFieldEntryValue(entry);
+    if (!val) continue;
+
+    const looksLikeStreet =
+      /^\d+[-\s]?\s*\d*\s*[A-Za-z]/.test(val) &&
+      (/,/.test(val) ||
+        /\b(st|street|rd|road|ave|avenue|dr|drive|ln|lane|blvd|ct|court|apt|apartment|unit|ste|suite|way|pl|place|ter|terrace|hwy|highway)\b/i.test(
+          val
+        ));
+
+    if (looksLikeStreet) return val;
+  }
+
+  return "";
+}
+
+function resolvePropertyAddressFromGhlContact(contact) {
+  if (!contact || typeof contact !== "object") return "";
+
+  const fieldKey =
+    process.env.GHL_PROPERTY_ADDRESS_FIELD_KEY || "property_address";
+  const fieldId = process.env.GHL_PROPERTY_ADDRESS_FIELD_ID || "";
+
+  const customFields = contact.customFields;
+  let fromCustom = "";
+
+  if (Array.isArray(customFields)) {
+    fromCustom =
+      resolveGhlCustomFieldFromList(customFields, { fieldKey, fieldId }) ||
+      guessPropertyAddressFromGhlCustomFields(customFields);
+  } else if (customFields && typeof customFields === "object") {
+    fromCustom = String(
+      customFields[fieldKey] ||
+        customFields.property_address ||
+        customFields["Property Address"] ||
+        (fieldId ? customFields[fieldId] : "") ||
+        ""
+    ).trim();
+  }
+
+  return (
+    fromCustom ||
+    String(contact.property_address || contact.propertyAddress || "").trim() ||
+    String(contact.address1 || contact.address || "").trim()
+  );
+}
+
+function resolvePropertyAddressFromLeadPayload(body) {
+  const payload = body && typeof body === "object" ? body : {};
+
+  const direct = String(
+    payload.property_address ||
+      payload.propertyAddress ||
+      payload["Property Address"] ||
+      payload.address ||
+      payload.streetAddress ||
+      ""
+  ).trim();
+  if (direct) return direct;
+
+  const fromNestedContact = resolvePropertyAddressFromGhlContact(payload.contact);
+  if (fromNestedContact) return fromNestedContact;
+
+  const fieldKey =
+    process.env.GHL_PROPERTY_ADDRESS_FIELD_KEY || "property_address";
+  const fieldId = process.env.GHL_PROPERTY_ADDRESS_FIELD_ID || "";
+
+  if (Array.isArray(payload.customFields)) {
+    const fromCustom =
+      resolveGhlCustomFieldFromList(payload.customFields, { fieldKey, fieldId }) ||
+      guessPropertyAddressFromGhlCustomFields(payload.customFields);
+    if (fromCustom) return fromCustom;
+  }
+
+  return "";
+}
+
 function normalizeAddressForSpeech(address) {
 if (!address) return "";
 
@@ -1241,11 +1358,7 @@ async function startNextQueuedLead() {
       city: contact.city || "",
       state: contact.state || "",
       postal_code: contact.postalCode || contact.postal_code || "",
-      property_address:
-        contact.customFields?.property_address ||
-        contact.property_address ||
-        contact.address1 ||
-        "",
+      property_address: resolvePropertyAddressFromGhlContact(contact),
     };
 
     console.log("Starting next GHL queued lead:", nextLead.phone);
@@ -1281,13 +1394,7 @@ async function startCallFromLead(body) {
     const full_name = body.full_name || body.fullName || body.name || "";
     const phone = body.phone || "";
 
-    const property_address =
-      body.property_address ||
-      body.propertyAddress ||
-      body["Property Address"] ||
-      body.address ||
-      body.streetAddress ||
-      "";
+    const property_address = resolvePropertyAddressFromLeadPayload(body);
 
     const city = body.city || "";
     const state = body.state || "";
