@@ -1162,11 +1162,6 @@ function startElevenKeepAlive(ws) {
   const pendingTwilioMediaPayloads = [];
   const MAX_PENDING_MEDIA_CHUNKS = 4000;
   let responseInProgress = false;
-  let assistantSpeaking = false;
-  let userSpeaking = false;
-  let pendingResponse = false;
-
-let userSpeechTimeout = null;
   /** Block new seller turns until estimated assistant audio finishes. */
   let assistantPlaybackUntil = 0;
   let assistantPlaybackTimer = null;
@@ -1934,8 +1929,6 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 
     // user starts speaking → stop any current playback (realtime mode only)
     if (event.type === "input_audio_buffer.speech_started") {
-      userSpeaking = true;
-      clearTimeout(userSpeechTimeout);
       logTime("Possible user speech detected");
 
       const canInterrupt =
@@ -1981,47 +1974,24 @@ fullCallTranscript += `SELLER: ${transcript}\n`;
 
       if (openAiWs.readyState !== WebSocket.OPEN) return;
 
-userSpeaking = true;
+if (responseInProgress) {
+  return;
+}
 
-clearTimeout(userSpeechTimeout);
+if (Date.now() < assistantPlaybackUntil) {
+  logTime("SPEECH STOPPED ignored — assistant still playing");
+  return;
+}
 
-userSpeechTimeout = setTimeout(() => {
+responseInProgress = true;
 
-  userSpeaking = false;
+logTime("SPEECH STOPPED → response.create (manual reply turn)");
 
-  if (userSpeaking) {
-    return;
-  }
-
-  if (responseInProgress) {
-    return;
-  }
-
-  if (Date.now() < assistantPlaybackUntil) {
-    logTime("SPEECH STOPPED ignored — assistant still playing");
-    return;
-  }
-
-  responseInProgress = true;
-
-  logTime("USER FINISHED → response.create");
-
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.cancel",
-    })
-  );
-
-  openAiWs.send(
-    JSON.stringify({
-      type: "response.create",
-      response: {
-        max_output_tokens: 60,
-      },
-    })
-  );
-
-}, 1100);
+openAiWs.send(
+  JSON.stringify({
+    type: "response.create",
+  })
+);
       }
 
 
