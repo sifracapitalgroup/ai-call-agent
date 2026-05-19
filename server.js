@@ -1486,11 +1486,16 @@ function interruptAssistant() {
   clearTwilioAudio();
 
 
-  if (openAiWs.readyState === WebSocket.OPEN) {
-    openAiWs.send(JSON.stringify({
-      type: "response.cancel"
-    }));
-  }
+ if (
+  responseInProgress &&
+  openAiWs.readyState === WebSocket.OPEN
+) {
+  openAiWs.send(
+    JSON.stringify({
+      type: "response.cancel",
+    })
+  );
+}
 
   return true;
 }
@@ -1764,10 +1769,7 @@ if (event.type === "conversation.item.input_audio_transcription.completed") {
 
    interruptAssistant();
 
-    openAiWs.send(JSON.stringify({
-      type: "response.cancel"
-    }));
-
+  
     clearTwilioAudio();
 
     try {
