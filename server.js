@@ -1434,8 +1434,8 @@ Mention the property address naturally if helpful.
     turn_detection: {
       type: "server_vad",
       threshold: 0.85,
-      prefix_padding_ms: 700,
-      silence_duration_ms: 575,
+      prefix_padding_ms: 950,
+      silence_duration_ms: 655,
       create_response: false,
       interrupt_response: true,
     },
