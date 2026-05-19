@@ -254,7 +254,7 @@ function buildFixedOutboundOpenerScript(ctx) {
     
     `I was calling about your property on ${ctx.locationClause}. ` +
     
-    `If the numbers made sense — would you consider selling it?`;
+    `If the numbers made sense — would you consider selling??`;
 
   return { hi, ask };
 }
