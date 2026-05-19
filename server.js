@@ -259,9 +259,9 @@ const ELEVEN_TONE_PRESETS = Object.freeze({
   },
 
   confidence: {
-    stability: 0.34,
-    similarity_boost: 0.92,
-    style: 0.58,
+    stability: 0.26,
+    similarity_boost: 0.94,
+    style: 0.78,
     use_speaker_boost: true,
   },
 
