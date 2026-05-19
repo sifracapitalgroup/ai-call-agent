@@ -1040,7 +1040,9 @@ app.post("/call-status", async (req, res) => {
     logTime("CALL STATUS:", req.body);
 
     const callStatus = req.body.CallStatus;
-    const callDuration = Number(req.body.Duration || req.body.CallDuration || 0);
+    const callDuration = Number(
+      req.body.CallDuration || req.body.Duration || 0
+    );
     const phone =
       (req.body.CallSid && callSidToLeadPhone.get(req.body.CallSid)) ||
       req.body.To ||
@@ -1093,6 +1095,9 @@ app.post("/call-status", async (req, res) => {
       }
 
       requestEndActiveMediaSession("call-status:completed", statusCallSid);
+      // Human-answered calls often never receive a Twilio `stop` event because we
+      // tear down the media session above; advance the dialer queue here too.
+      finishQueueCall(statusCallSid);
     }
 
     res.sendStatus(200);
@@ -1560,6 +1565,111 @@ let firstTwilioAudio = false;
   let elevenWs = null;
   let elevenKeepAlive = null;
   let mediaSessionEnded = false;
+  let callAfterMediaFinalized = false;
+
+  async function finalizeCallAfterMediaEnd(source) {
+    if (callAfterMediaFinalized) return;
+    callAfterMediaFinalized = true;
+
+    const wrongNumberAlreadyHandled =
+      callState === CALL_STATE.WRONG_NUMBER;
+
+    if (callState !== CALL_STATE.ENDED) {
+      callState = CALL_STATE.ENDED;
+    }
+
+    logTime("Finalizing call after media end:", source, callSid);
+
+    if (callSid) {
+      const summaryPrompt = `
+Summarize this real estate call in ONE short line.
+
+Interest level MUST be one of:
+- interested
+- not interested
+- follow up
+- no answer
+
+Format exactly like this:
+interest: [one of the four], condition: [if mentioned], timeline: [if mentioned], price: [if mentioned]
+
+Keep it very short. No extra words.
+
+Call:
+${fullCallTranscript}
+`;
+
+      let summary = "";
+
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "Only output the formatted call summary line.",
+              },
+              { role: "user", content: summaryPrompt },
+            ],
+          }),
+        });
+
+        const data = await res.json();
+        summary = data.choices?.[0]?.message?.content || "";
+      } catch (err) {
+        console.error("Summary error:", err);
+      }
+
+      callNotesBySid[callSid] = {
+        summary,
+        transcript: fullCallTranscript,
+        endedAt: new Date().toISOString(),
+      };
+
+      logTime("CALL SUMMARY:", summary);
+    }
+
+    const terminalStatusAlreadyHandled =
+      callSid && callSidTerminalStatusHandled.has(callSid);
+
+    if (wrongNumberAlreadyHandled) {
+      logTime(
+        "Skipping final classification because wrong number was already detected."
+      );
+      finishQueueCall(callSid);
+    } else if (terminalStatusAlreadyHandled) {
+      logTime(
+        "Skipping stream-stop GHL update — terminal call-status already handled."
+      );
+      finishQueueCall(callSid);
+    } else if (!sellerUtteranceDetected) {
+      updateGHL(
+        "no_answer_voicemail",
+        "No answer or voicemail reached. No meaningful seller response.",
+        currentCallLead.phone
+      ).finally(() => finishQueueCall(callSid));
+    } else if (!fullTranscript || fullTranscript.length < 10) {
+      updateGHL(
+        "follow_up",
+        "Seller answered but hung up before a full conversation.",
+        currentCallLead.phone
+      ).finally(() => finishQueueCall(callSid));
+    } else {
+      classifyCall(fullTranscript).then((result) => {
+        updateGHL(
+          result.ai_call_outcome,
+          result.call_summary,
+          currentCallLead.phone
+        ).finally(() => finishQueueCall(callSid));
+      });
+    }
+  }
 
   function teardownMediaSession(reason) {
     if (mediaSessionEnded) return;
@@ -2577,96 +2687,8 @@ openAiWs.send(
     callSid,
   });
 
-  const wrongNumberAlreadyHandled =
-    callState === CALL_STATE.WRONG_NUMBER;
-
-  callState = CALL_STATE.ENDED;
   teardownMediaSession("stream-stop");
-
-  if (callSid) {
-    const summaryPrompt = `
-Summarize this real estate call in ONE short line.
-
-Interest level MUST be one of:
-- interested
-- not interested
-- follow up
-- no answer
-
-Format exactly like this:
-interest: [one of the four], condition: [if mentioned], timeline: [if mentioned], price: [if mentioned]
-
-Keep it very short. No extra words.
-
-Call:
-${fullCallTranscript}
-`;
-
-    let summary = "";
-
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: "Only output the formatted call summary line." },
-            { role: "user", content: summaryPrompt },
-          ],
-        }),
-      });
-
-      const data = await res.json();
-      summary = data.choices?.[0]?.message?.content || "";
-    } catch (err) {
-      console.error("Summary error:", err);
-    }
-
-    callNotesBySid[callSid] = {
-      summary,
-      transcript: fullCallTranscript,
-      endedAt: new Date().toISOString(),
-    };
-
-    logTime("CALL SUMMARY:", summary);
-  }
-
-const terminalStatusAlreadyHandled =
-  callSid && callSidTerminalStatusHandled.has(callSid);
-
-if (wrongNumberAlreadyHandled) {
-  logTime("Skipping final classification because wrong number was already detected.");
-  finishQueueCall(callSid);
-} else if (terminalStatusAlreadyHandled) {
-  logTime(
-    "Skipping stream-stop GHL update — terminal call-status already handled."
-  );
-  finishQueueCall(callSid);
-} else if (!sellerUtteranceDetected) {
-  updateGHL(
-    "no_answer_voicemail",
-    "No answer or voicemail reached. No meaningful seller response.",
-    currentCallLead.phone
-  ).finally(() => finishQueueCall(callSid));
-} else if (!fullTranscript || fullTranscript.length < 10) {
-  updateGHL(
-    "follow_up",
-    "Seller answered but hung up before a full conversation.",
-    currentCallLead.phone
-  ).finally(() => finishQueueCall(callSid));
-} else {
-  classifyCall(fullTranscript).then((result) => {
-    updateGHL(
-      result.ai_call_outcome,
-      result.call_summary,
-      currentCallLead.phone
-    ).finally(() => finishQueueCall(callSid));
-  });
-}
+  void finalizeCallAfterMediaEnd("stream-stop");
 
   return;
 }
@@ -2678,6 +2700,7 @@ if (wrongNumberAlreadyHandled) {
   twilioWs.on("close", () => {
     logTime("Twilio websocket closed");
     teardownMediaSession("twilio-ws-close");
+    void finalizeCallAfterMediaEnd("twilio-ws-close");
   });
 
   twilioWs.on("error", (err) => {
