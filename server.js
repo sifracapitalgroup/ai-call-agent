@@ -994,10 +994,13 @@ app.post("/recording", async (req, res) => {
 });
 
 app.all("/start-dialer", async (req, res) => {
-  if (!dialerRunning) {
-    dialerRunning = true;
-    console.log("Dialer started.");
+  dialerRunning = true;
+
+  if (!activeCall) {
+    console.log("Dialer started/restarted. Kicking queue.");
     setTimeout(startNextQueuedLead, 1000);
+  } else {
+    console.log("Dialer running. Current call still active.");
   }
 
   res.json({
@@ -1009,7 +1012,14 @@ app.all("/start-dialer", async (req, res) => {
 
 app.all("/stop-dialer", async (req, res) => {
   dialerRunning = false;
-  res.json({ success: true, message: "Dialer will stop after current call" });
+
+  console.log("Dialer paused.");
+
+  res.json({
+    success: true,
+    message: "Dialer will stop after current call",
+    activeCall,
+  });
 });
 
 let pipelineCache = null;
