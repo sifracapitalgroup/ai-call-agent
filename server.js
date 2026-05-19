@@ -1643,16 +1643,14 @@ function interruptAssistant() {
       ws.on("open", () => {
         logTime("ELEVENLABS WS OPEN");
 
-        ws.send(
-          JSON.stringify({
-            text: " ",
-            voice_settings: ELEVEN_SESSION_VOICE_SETTINGS,
-            generation_config: {
-              chunk_length_schedule: [120, 160, 220, 290],
-            },
-          })
-        );
-
+      ws.send(
+  JSON.stringify({
+    text: " ",
+    generation_config: {
+      chunk_length_schedule: [120, 160, 220, 290],
+    },
+  })
+);
         resolve(ws);
       });
 
