@@ -22,6 +22,24 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 let currentCallLead = {};
 let callNotesBySid = {};
+
+let dialerRunning = false;
+let activeCall = false;
+let activeCallSid = null;
+
+const leadQueue = [];
+const queuedPhones = new Set();
+
+function finishQueueCall() {
+  activeCall = false;
+  activeCallSid = null;
+
+  if (dialerRunning) {
+    logTime("Call finished. Starting next queued lead in 2 seconds.");
+    setTimeout(startNextQueuedLead, 2000);
+  }
+}
+
 /** Twilio recording webhooks often omit `To`/`Called`; map parent CallSid → dialed E.164. */
 const callSidToLeadPhone = new Map();
 /** Elapsed-ms prefix for call-scoped logs (reset on each /start-call). */
@@ -971,14 +989,65 @@ app.post("/recording", async (req, res) => {
   }
 });
 
-app.post("/start-call", async (req, res) => {
+app.post("/start-dialer", async (req, res) => {
+  const body = req.body || {};
+  const phone = String(body.phone || "").trim();
+
+  if (phone && !queuedPhones.has(phone)) {
+    leadQueue.push(body);
+    queuedPhones.add(phone);
+    console.log("Lead added to dialer queue:", phone);
+  }
+
+  if (!dialerRunning) {
+    dialerRunning = true;
+    console.log("Dialer started.");
+    setTimeout(startNextQueuedLead, 1000);
+  }
+
+  res.json({
+    success: true,
+    message: "Lead queued / dialer running",
+    queueLength: leadQueue.length,
+    activeCall,
+  });
+});
+
+app.post("/stop-dialer", async (req, res) => {
+  dialerRunning = false;
+  res.json({ success: true, message: "Dialer will stop after current call" });
+});
+
+async function startNextQueuedLead() {
+  if (!dialerRunning) return;
+  if (activeCall) return;
+
+  const nextLead = leadQueue.shift();
+
+  if (!nextLead) {
+    console.log("No queued leads left. Dialer stopped.");
+    dialerRunning = false;
+    return;
+  }
+
+  const phone = String(nextLead.phone || "").trim();
+  if (phone) queuedPhones.delete(phone);
+
+  activeCall = true;
+
+  console.log("Starting next queued lead:", phone);
+
+  await startCallFromLead(nextLead);
+}
+
+async function startCallFromLead(body) {
   try {
     callStartTime = Date.now();
     lastWordEmitTime = null;
 
-    logTime("RAW GHL BODY:", JSON.stringify(req.body, null, 2));
+    logTime("RAW GHL BODY:", JSON.stringify(body, null, 2));
     
-    const body = req.body || {};
+    body = body || {};
 
 const first_name = body.first_name || body.firstName || "";
 const last_name = body.last_name || body.lastName || "";
@@ -1036,7 +1105,6 @@ const call_notes =
       first_name:
   first_name ||
   full_name?.split(" ")[0] ||
-  name?.split(" ")[0] ||
   "there",
       last_name: last_name || "",
       phone: cleanPhone,
@@ -1061,15 +1129,11 @@ const call_notes =
     logTime("GHL WEBHOOK HIT:", currentCallLead);
 
     if (!cleanPhone) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing phone number",
-      });
-    }
+  throw new Error("Missing phone number");
+}
 
     const publicBaseUrl =
-      process.env.PUBLIC_BASE_URL?.replace(/\/$/, "") ||
-      `https://${req.headers.host}`;
+  process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
 
     const call = await twilioClient.calls.create({
   to: cleanPhone,
@@ -1089,14 +1153,13 @@ const call_notes =
 });
 
     callSidToLeadPhone.set(call.sid, cleanPhone);
+    activeCall = true;
+activeCallSid = call.sid;
 
     logTime("OUTBOUND CALL STARTED:", call.sid);
 
-    res.status(200).json({
-      success: true,
-      message: "Call started",
-      callSid: call.sid,
-    });
+    activeCallSid = call.sid;
+return call;
   } catch (err) {
     console.error("START CALL ERROR:", err);
     res.status(500).json({
@@ -1104,11 +1167,37 @@ const call_notes =
       error: err.message,
     });
   }
+
+app.post("/start-call", async (req, res) => {
+  try {
+    if (activeCall) {
+      return res.status(409).json({
+        success: false,
+        error: "Call already active",
+      });
+    }
+
+    activeCall = true;
+
+    const call = await startCallFromLead(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: "Call started",
+      callSid: call.sid,
+    });
+  } catch (err) {
+    activeCall = false;
+    activeCallSid = null;
+
+    console.error("START CALL ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
 });
-
-
-
-
 
 wss.on("connection", (twilioWs) => {
   if (callStartTime == null) {
@@ -2164,21 +2253,26 @@ ${fullCallTranscript}
 
 if (wrongNumberAlreadyHandled) {
   logTime("Skipping final classification because wrong number was already detected.");
+  finishQueueCall();
 } else if (!sellerUtteranceDetected) {
-updateGHL(
-  "no_answer_voicemail",
-  "No answer or voicemail reached. No meaningful seller response.",
-  currentCallLead.phone
-);
+  updateGHL(
+    "no_answer_voicemail",
+    "No answer or voicemail reached. No meaningful seller response.",
+    currentCallLead.phone
+  ).finally(finishQueueCall);
 } else if (!fullTranscript || fullTranscript.length < 10) {
-updateGHL(
-  "follow_up",
-  "Seller answered but hung up before a full conversation.",
-  currentCallLead.phone
-);
+  updateGHL(
+    "follow_up",
+    "Seller answered but hung up before a full conversation.",
+    currentCallLead.phone
+  ).finally(finishQueueCall);
 } else {
   classifyCall(fullTranscript).then((result) => {
-updateGHL(result.ai_call_outcome, result.call_summary, currentCallLead.phone);
+    updateGHL(
+      result.ai_call_outcome,
+      result.call_summary,
+      currentCallLead.phone
+    ).finally(finishQueueCall);
   });
 }
 
